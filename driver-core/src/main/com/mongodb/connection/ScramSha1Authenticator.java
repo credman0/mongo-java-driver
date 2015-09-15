@@ -24,8 +24,8 @@ import javax.crypto.Mac;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
-import javax.security.sasl.SaslClient;
-import javax.security.sasl.SaslException;
+import gnusasl.javax.security.sasl.SaslClient;
+import gnusasl.javax.security.sasl.SaslException;
 import java.io.UnsupportedEncodingException;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
@@ -56,7 +56,7 @@ class ScramSha1Authenticator extends SaslAuthenticator {
         return SCRAM_SHA_1.getMechanismName();
     }
 
-    @Override
+    //@Override
     protected SaslClient createSaslClient(final ServerAddress serverAddress) {
         return new ScramSha1SaslClient(getCredential(), randomStringGenerator);
     }
