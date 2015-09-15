@@ -26,12 +26,10 @@ install:
     - mkdir data
 before_script:
     - mongod ${MONGOD_OPTS}
-    - pwd
-    - ls -la
     - ./clone-gh-pages.sh
 script:
     - ./gradlew -q assemble
-    #- ./gradlew check -i -S -Pquicktest=true
+    - ./gradlew check -i -S -Pquicktest=true
     - cp /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/libs/mongo-java-driver-3.1.0-SNAPSHOT.jar ./gh-pages/JARs/
 after_success:
     - ./update-gh-pages.sh
