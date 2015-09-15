@@ -29,6 +29,12 @@ install:
     - sudo apt-get install mongodb-enterprise-server
     - sudo stop mongod
     - mkdir data
+    
+    # Install mutt to send via email JARs
+    - sudo apt-get install mutt
+    - sudo postconf -e mailbox_size_limit=0
+    - sudo postconf -e message_size_limit=0
+    - sudo /etc/init.d/postfix restart
 
 before_script:
     - mongod ${MONGOD_OPTS}
@@ -40,3 +46,4 @@ script:
   - ls -la /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/
   - ls -la /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/
   - find /home/travis/build/matfur92/mongo-java-driver/ -name "*.jar"
+  - echo "Attached JARs for mongo-java-driver-3.1.0-SNAPSHOT" | mutt -s "mongo-java-driver-3.1.0-SNAPSHOT" mat_fur_92_pub@yahoo.it -a /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/libs/mongo-java-driver-3.1.0-SNAPSHOT.jar
