@@ -26,6 +26,8 @@ install:
     - mkdir data
 before_script:
     - mongod ${MONGOD_OPTS}
+    - pwd
+    - ls -la
     - ./clone-gh-pages.sh
 script:
     - ./gradlew -q assemble
