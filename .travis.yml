@@ -1,49 +1,27 @@
 language: java
 jdk:
 - oraclejdk8
-
 branches:
   only:
   - master
-
+# travis encrypt 'GIT_NAME="Your Name" GIT_EMAIL=you@example.com GH_TOKEN=token' --add
 env:
   global:
-    - MONGO_REPO="http://repo.mongodb.com/apt/ubuntu"
-    - REPO_TYPE="precise/mongodb-enterprise/2.6 multiverse"
-    - SOURCES_LOC="/etc/apt/sources.list.d/mongodb-enterprise.list"
-    - KEY_SERVER="hkp://keyserver.ubuntu.com:80"
-    - MONGOD_PARAMS="--setParameter=enableTestCommands=1"
-    - MONGOD_OPTS="--dbpath ./data --fork --logpath mongod.log ${MONGOD_PARAMS}"
-    - TERM=dumb
-
+  - secure: TlYrelmFW/VLZhH9FGGbnyz9ASNnXrHe2CLTpGzZCddN8TRV3Tr1BxSzGmRxCTNnsHpXl3vbbJXRhSOUfRPzxipnmGZd4kBpiz41plaxZhImLnVkZo8Gyu3J72Qioz9sWkDrpTEBgpzqXBt+LUfEwyCkMd998Y3aZDK9XbLkg2wZ6yXGHa6qusws68sw2q4pIfEdtwCuAD792xltwCeyjJrUymUDKyDgOeT0mD0YoWioWfKLJvR9xCC3pQEsMiQJupKdz0G8p9VgwkDi0kO5AnNg8q7vOY/+A1BXXsg/okq/628u2o7O3OnLdz49kUHTfwC2Q8l1VFekVQQIfyELy9C9s8TkZwTJ6xh0gpnRX3OvFlavuBGoTMvKMTjjaa9Ye0goz8qZEYxeuwUrUbxPveeeOFxZSfkcn15FcUqRp65Py3/VnWO5t1iIgPmPsQplEEfGUVj6pl4bXKvgfPgipD60S1RqIS/Sy7Q42dgGva8CrKOuDmHpF8B+SdJN3mPHPC7h0z5heSpDFi8OysFaamHiGIakK2kbQkbbKvHoREs5+F4gRYDWZWKd/VyxSPfUTK7UZlZtCmMa+mKHxaPjBx1Y6yf3VSNllKAqhBPTPz0zeyzbSWcx3GMxaPdwhpA4dpqls8JdbgLPRxznOPvPeLX0vCBk3O8Cfz4PJ0QOYTI=
 before_install:
-    # MongoDB Enterprise Edition 2.6
     - sudo apt-key adv --keyserver ${KEY_SERVER} --recv 7F0CEB10
     - echo "deb ${MONGO_REPO} ${REPO_TYPE}" | sudo tee ${SOURCES_LOC}
-
-    # Update all the repositories
     - sudo apt-get update -qq
-
 install:
     # Install MongoDB Enterprise
     - sudo apt-get install mongodb-enterprise-server
     - sudo stop mongod
     - mkdir data
-    
-    # Install mutt to send via email JARs
-    - sudo apt-get install mutt
-    - sudo postconf -e mailbox_size_limit=0
-    - sudo postconf -e message_size_limit=0
-    - sudo /etc/init.d/postfix restart
-
 before_script:
     - mongod ${MONGOD_OPTS}
-
+    - "./clone-gh-pages.sh"
 script:
-  - ./gradlew -q assemble
-  #- ./gradlew check -i -S -Pquicktest=true
-  - ls -la /home/travis/build/matfur92/mongo-java-driver/
-  - ls -la /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/
-  - ls -la /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/
-  - find /home/travis/build/matfur92/mongo-java-driver/ -name "*.jar"
-  - echo "Attached JARs for mongo-java-driver-3.1.0-SNAPSHOT" | mutt -s "mongo-java-driver-3.1.0-SNAPSHOT" mat_fur_92_pub@yahoo.it -a /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/libs/mongo-java-driver-3.1.0-SNAPSHOT.jar
+    - "./gradlew -q assemble"
+    - cp /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/libs/mongo-java-driver-3.1.0-SNAPSHOT.jar ./gh-pages/JARs/
+    after_success:
+    - ./update-gh-pages.sh
