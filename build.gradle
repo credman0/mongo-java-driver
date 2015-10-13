@@ -181,7 +181,7 @@ configure(subprojects.findAll { it.name != 'util' && it.name != 'mongo-java-driv
                 excludeCategories 'category.ReplicaSet'
             }
             if (project.buildingWith('quicktest')) {
-                excludeCategories 'category.Slow'
+                excludeCategories 'category.SlowUnit'
             }
         }
 
@@ -201,6 +201,12 @@ configure(subprojects.findAll { it.name != 'util' && it.name != 'mongo-java-driv
         testLogging { exceptionFormat = 'full' }
     }
 
+    task testSlowUnit(type: Test) {
+        useJUnit {
+            includeCategories 'category.SlowUnit'
+        }
+    }
+
     gradle.taskGraph.whenReady { taskGraph ->
         if (taskGraph.hasTask(testCoverage)) {
             tasks.withType(Test) { jacoco { enabled = true } }
@@ -210,13 +216,15 @@ configure(subprojects.findAll { it.name != 'util' && it.name != 'mongo-java-driv
     task testCoverage(dependsOn: test)
 
     /* Code quality */
+
     checkstyle {
         toolVersion = "6.2"
-        configFile = new File("$configDir/checkstyle.xml")
+        configFile = new File(configDir, 'checkstyle.xml')
+        configProperties.checkstyleConfigDir = configDir
     }
 
     findbugs {
-        excludeFilter = new File("$configDir/findbugs-exclude.xml")
+        excludeFilter = new File(configDir, 'findbugs-exclude.xml')
         sourceSets = [sourceSets.main]
         toolVersion = '3.0.1'
     }
@@ -258,4 +266,3 @@ gradle.buildFinished { BuildResult result ->
 }
 
 apply from: 'gradle/deploy.gradle'
-
