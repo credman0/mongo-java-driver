@@ -56,7 +56,7 @@ class ScramSha1Authenticator extends SaslAuthenticator {
         return SCRAM_SHA_1.getMechanismName();
     }
 
-    //@Override
+    @Override
     protected SaslClient createSaslClient(final ServerAddress serverAddress) {
         return new ScramSha1SaslClient(getCredential(), randomStringGenerator);
     }

@@ -58,7 +58,7 @@ class GSSAPIAuthenticator extends SaslAuthenticator {
     }
 
     @Override
-    protected gnusasl.javax.security.sasl.SaslClient createSaslClient(final ServerAddress serverAddress) {
+    protected SaslClient createSaslClient(final ServerAddress serverAddress) {
         MongoCredential credential = getCredential();
         try {
             Map<String, Object> props = new HashMap<String, Object>();

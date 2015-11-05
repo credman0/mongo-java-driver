@@ -36,6 +36,7 @@ abstract class SaslAuthenticator extends Authenticator {
 
     SaslAuthenticator(final MongoCredential credential) {
         super(credential);
+        java.security.Security.addProvider(new gnu.javax.crypto.jce.GnuSasl());
     }
 
     public void authenticate(final InternalConnection connection, final ConnectionDescription connectionDescription) {
