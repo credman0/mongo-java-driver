@@ -33,3 +33,5 @@ script:
     - cp /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/libs/mongo-java-driver-3.2.0-SNAPSHOT.jar ./gh-pages/JARs/
 after_success:
     - ./update-gh-pages.sh
+after_failure:
+    - ./update-gh-pages.sh
