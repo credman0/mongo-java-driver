@@ -27,6 +27,7 @@ import static com.mongodb.MongoCredential.createPlainCredential
 import static com.mongodb.MongoCredential.createScramSha1Credential
 import static com.mongodb.ReadPreference.secondaryPreferred
 import static java.util.Arrays.asList
+import static java.util.concurrent.TimeUnit.MILLISECONDS
 
 class ConnectionStringSpecification extends Specification {
 
@@ -82,10 +83,11 @@ class ConnectionStringSpecification extends Specification {
         new ConnectionString('mongodb://localhost')                                          | null
         new ConnectionString('mongodb://localhost/?safe=true')                               | WriteConcern.ACKNOWLEDGED
         new ConnectionString('mongodb://localhost/?safe=false')                              | WriteConcern.UNACKNOWLEDGED
-        new ConnectionString('mongodb://localhost/?wTimeout=5')                              | new WriteConcern(1, 5, false, false)
-        new ConnectionString('mongodb://localhost/?fsync=true')                              | new WriteConcern(1, 0, true, false)
-        new ConnectionString('mongodb://localhost/?j=true')                                  | new WriteConcern(1, 0, false, true)
-        new ConnectionString('mongodb://localhost/?w=2&wtimeout=5&fsync=true&j=true')        | new WriteConcern(2, 5, true, true)
+        new ConnectionString('mongodb://localhost/?wTimeout=5')                              | WriteConcern.ACKNOWLEDGED
+                                                                                                           .withWTimeout(5, MILLISECONDS)
+        new ConnectionString('mongodb://localhost/?fsync=true')                              | WriteConcern.ACKNOWLEDGED.withFsync(true)
+        new ConnectionString('mongodb://localhost/?journal=true')                            | WriteConcern.ACKNOWLEDGED.withJournal(true)
+        new ConnectionString('mongodb://localhost/?w=2&wtimeout=5&fsync=true&journal=true')  | new WriteConcern(2, 5, true, true)
         new ConnectionString('mongodb://localhost/?w=majority&wtimeout=5&fsync=true&j=true') | new WriteConcern('majority', 5, true, true)
     }
 
@@ -150,6 +152,7 @@ class ConnectionStringSpecification extends Specification {
         'invalid integer in options'                | 'mongodb://localhost/?wTimeout=five'
         'has incomplete options'                    | 'mongodb://localhost/?wTimeout'
         'has an unknown auth mechanism'             | 'mongodb://user:password@localhost/?authMechanism=postItNote'
+        'invalid readConcern'                       | 'mongodb://localhost:27017/?readConcernLevel=pickThree'
 
     }
 
@@ -164,6 +167,7 @@ class ConnectionStringSpecification extends Specification {
         connectionString.getConnectTimeout() == null;
         connectionString.getSocketTimeout() == null;
         connectionString.getWriteConcern() == null;
+        connectionString.getReadConcern() == null;
         connectionString.getReadPreference() == null;
         connectionString.getRequiredReplicaSetName() == null
         connectionString.getSslEnabled() == null
@@ -260,6 +264,18 @@ class ConnectionStringSpecification extends Specification {
                                                                                                                  new Tag('rack', '1'))),
                                                                                                new TagSet(asList(new Tag('dc', 'ny'))),
                                                                                                new TagSet()])
+    }
+
+    @Unroll
+    def 'should correct parse read concern for #readConcern'() {
+        expect:
+        uri.getReadConcern() == readConcern;
+
+        where:
+        uri                                                                     | readConcern
+        new ConnectionString('mongodb://localhost/')                            | null
+        new ConnectionString('mongodb://localhost/?readConcernLevel=local')     | ReadConcern.LOCAL
+        new ConnectionString('mongodb://localhost/?readConcernLevel=majority')  | ReadConcern.MAJORITY
     }
 
     def 'should be equal to another instance with the same string values'() {

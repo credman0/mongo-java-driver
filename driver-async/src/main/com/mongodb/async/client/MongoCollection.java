@@ -17,6 +17,7 @@
 package com.mongodb.async.client;
 
 import com.mongodb.MongoNamespace;
+import com.mongodb.ReadConcern;
 import com.mongodb.ReadPreference;
 import com.mongodb.WriteConcern;
 import com.mongodb.annotations.ThreadSafe;
@@ -30,6 +31,7 @@ import com.mongodb.client.model.FindOneAndUpdateOptions;
 import com.mongodb.client.model.IndexModel;
 import com.mongodb.client.model.IndexOptions;
 import com.mongodb.client.model.InsertManyOptions;
+import com.mongodb.client.model.InsertOneOptions;
 import com.mongodb.client.model.RenameCollectionOptions;
 import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.WriteModel;
@@ -93,6 +95,15 @@ public interface MongoCollection<TDocument> {
     WriteConcern getWriteConcern();
 
     /**
+     * Get the read concern for the MongoCollection.
+     *
+     * @return the {@link com.mongodb.ReadConcern}
+     * @since 3.2
+     * @mongodb.server.release 3.2
+     */
+    ReadConcern getReadConcern();
+
+    /**
      * Create a new MongoCollection instance with a different default class to cast any documents returned from the database into..
      *
      * @param newDocumentClass the default class to cast any documents returned from the database into.
@@ -124,6 +135,16 @@ public interface MongoCollection<TDocument> {
      * @return a new MongoCollection instance with the different writeConcern
      */
     MongoCollection<TDocument> withWriteConcern(WriteConcern writeConcern);
+
+    /**
+     * Create a new MongoCollection instance with a different read concern.
+     *
+     * @param readConcern the new {@link ReadConcern} for the collection
+     * @return a new MongoCollection instance with the different ReadConcern
+     * @since 3.2
+     * @mongodb.server.release 3.2
+     */
+    MongoCollection<TDocument> withReadConcern(ReadConcern readConcern);
 
     /**
      * Counts the number of documents in the collection.
@@ -284,6 +305,20 @@ public interface MongoCollection<TDocument> {
      * @throws com.mongodb.MongoException             returned via the callback
      */
     void insertOne(TDocument document, SingleResultCallback<Void> callback);
+
+    /**
+     * Inserts the provided document. If the document is missing an identifier, the driver should generate one.
+     *
+     * @param document the document to insert
+     * @param options  the options to apply to the operation
+     * @param callback the callback that is completed once the insert has completed
+     * @throws com.mongodb.MongoWriteException        returned via the callback
+     * @throws com.mongodb.MongoWriteConcernException returned via the callback
+     * @throws com.mongodb.MongoCommandException      returned via the callback
+     * @throws com.mongodb.MongoException             returned via the callback
+     * @since 3.2
+     */
+    void insertOne(TDocument document, InsertOneOptions options, SingleResultCallback<Void> callback);
 
     /**
      * Inserts one or more documents.  A call to this method is equivalent to a call to the {@code bulkWrite} method

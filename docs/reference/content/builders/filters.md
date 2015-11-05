@@ -177,6 +177,27 @@ Available with MongoDB 3.2, a version 3 text index allows diacritic-sensitive se
 
 ```java
 text("café", new TextSearchOptions().diacriticSensitive(true))
+<<<<<<< HEAD
+=======
+```
+
+### Bitwise
+
+The bitwise query operators, available with MongoDB 3.2 include:
+
+- `bitsAllSet`: Selects documents where the all the specified bits of a field are set (i.e. 1).
+- `bitsAllClear`: Selects documents where the all the specified bits of a field are clear (i.e. 0).
+- `bitsAnySet`: Selects documents where at least one of the specified bits of a field are set (i.e. 1).
+- `bitsAnyClear`: Selects documents where at least one of the specified bits of a field are clear (i.e. 0)
+
+
+#### Examples
+
+The example selects documents that have a `bitField` field with bits set at positions of the corresponding bitmask `50` (i.e. `00110010`):
+
+```java
+bitsAllSet("bitField", 50)
+>>>>>>> mongodb/master
 ```
 
 ### Geospatial
@@ -218,14 +239,14 @@ Polygon polygon = new Polygon(Arrays.asList(new Position(0, 0),
                                             new Position(4, 4), 
                                             new Position(0, 4),
                                             new Position(0, 0)));
-geoWithin('geo', polygon))
+geoWithin("geo", polygon))
 ```
 
 Similarly, this example creates a filter that selects all documents where the `geo` field contains a GeoJSON Geometry object that 
 intersects the given Point:
 
 ```java
-geoIntersects('geo', new Point(new Position(4, 0)))
+geoIntersects("geo", new Point(new Position(4, 0)))
 ```
 
 

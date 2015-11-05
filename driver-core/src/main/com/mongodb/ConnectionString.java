@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static com.mongodb.AuthenticationMechanism.GSSAPI;
 import static com.mongodb.AuthenticationMechanism.MONGODB_CR;
@@ -177,6 +178,7 @@ public class ConnectionString {
 
     private ReadPreference readPreference;
     private WriteConcern writeConcern;
+    private ReadConcern readConcern;
 
     private Integer minConnectionPoolSize;
     private Integer maxConnectionPoolSize;
@@ -295,6 +297,7 @@ public ConnectionString(final String connectionString) {
         GENERAL_OPTIONS_KEYS.add("sockettimeoutms");
         GENERAL_OPTIONS_KEYS.add("ssl");
         GENERAL_OPTIONS_KEYS.add("replicaset");
+        GENERAL_OPTIONS_KEYS.add("readconcernlevel");
 
         READ_PREFERENCE_KEYS.add("readpreference");
         READ_PREFERENCE_KEYS.add("readpreferencetags");
@@ -353,6 +356,8 @@ public ConnectionString(final String connectionString) {
                 sslEnabled = true;
             } else if (key.equals("replicaset")) {
                 requiredReplicaSetName = value;
+            } else if (key.equals("readconcernlevel")) {
+                readConcern = new ReadConcern(ReadConcernLevel.fromString(value));
             }
         }
 
@@ -363,9 +368,9 @@ public ConnectionString(final String connectionString) {
     private WriteConcern createWriteConcern(final Map<String, List<String>> optionsMap) {
         Boolean safe = null;
         String w = null;
-        int wTimeout = 0;
-        boolean fsync = false;
-        boolean journal = false;
+        Integer wTimeout = null;
+        Boolean fsync = null;
+        Boolean journal = null;
 
         for (final String key : WRITE_CONCERN_KEYS) {
             String value = getLastValue(optionsMap, key);
@@ -551,6 +556,7 @@ public ConnectionString(final String connectionString) {
 
     @SuppressWarnings("deprecation")
     private WriteConcern buildWriteConcern(final Boolean safe, final String w,
+<<<<<<< HEAD
                                            final int wTimeout, final boolean fsync, final boolean journal) {
         if (w != null || wTimeout != 0 || fsync || journal) {
             WriteConcern writeConcernWithWValue;
@@ -564,14 +570,38 @@ public ConnectionString(final String connectionString) {
                 }
             }
             return writeConcernWithWValue.withWTimeout(wTimeout).withJ(journal).withFsync(fsync);
+=======
+                                           final Integer wTimeout, final Boolean fsync, final Boolean journal) {
+        WriteConcern retVal = null;
+        if (w != null || wTimeout != null || fsync != null || journal != null) {
+            if (w == null) {
+                retVal = WriteConcern.ACKNOWLEDGED;
+            } else {
+                try {
+                    retVal = new WriteConcern(Integer.parseInt(w));
+                } catch (NumberFormatException e) {
+                    retVal = new WriteConcern(w);
+                }
+            }
+            if (wTimeout != null) {
+                retVal = retVal.withWTimeout(wTimeout, TimeUnit.MILLISECONDS);
+            }
+            if (journal != null) {
+                retVal = retVal.withJournal(journal);
+            }
+            if (fsync != null) {
+                retVal = retVal.withFsync(fsync);
+            }
+            return retVal;
+>>>>>>> mongodb/master
         } else if (safe != null) {
             if (safe) {
-                return WriteConcern.ACKNOWLEDGED;
+                retVal = WriteConcern.ACKNOWLEDGED;
             } else {
-                return WriteConcern.UNACKNOWLEDGED;
+                retVal = WriteConcern.UNACKNOWLEDGED;
             }
         }
-        return null;
+        return retVal;
     }
 
     private TagSet getTags(final String tagSetString) {
@@ -768,6 +798,14 @@ public ConnectionString(final String connectionString) {
      */
     public ReadPreference getReadPreference() {
         return readPreference;
+    }
+
+    /**
+     * Gets the read concern specified in the connection string.
+     * @return the read concern
+     */
+    public ReadConcern getReadConcern() {
+        return readConcern;
     }
 
     /**

@@ -87,6 +87,7 @@ class IndexOptionsSpecification extends Specification {
         options2.getBucketSize() == 200.0
         options2.getStorageEngine() == storageEngine
         options2.getPartialFilterExpression() == partialFilterExpression
+<<<<<<< HEAD
     }
 
     def 'should validate textIndexVersion'() {
@@ -133,6 +134,8 @@ class IndexOptionsSpecification extends Specification {
 
         then:
         thrown(IllegalArgumentException)
+=======
+>>>>>>> mongodb/master
     }
 
     def 'should convert expireAfter'() {

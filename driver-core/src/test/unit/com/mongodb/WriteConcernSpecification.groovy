@@ -23,6 +23,13 @@ import org.bson.BsonString
 import spock.lang.Specification
 import spock.lang.Unroll
 
+<<<<<<< HEAD
+=======
+import static java.util.concurrent.TimeUnit.MICROSECONDS
+import static java.util.concurrent.TimeUnit.MILLISECONDS
+import static java.util.concurrent.TimeUnit.SECONDS
+
+>>>>>>> mongodb/master
 @SuppressWarnings('deprecation')
 class WriteConcernSpecification extends Specification {
 
@@ -30,11 +37,16 @@ class WriteConcernSpecification extends Specification {
     def 'constructors should set up write concern #wc correctly'() {
         expect:
         wc.getWObject() == w;
+<<<<<<< HEAD
         wc.getWtimeout() == wTimeout;
+=======
+        wc.getWTimeout(MILLISECONDS) == wTimeout;
+>>>>>>> mongodb/master
         wc.getFsync() == fsync;
-        wc.getJ() == j;
+        wc.getJournal() == journal;
 
         where:
+<<<<<<< HEAD
         wc                                                | w    | wTimeout | fsync | j
         new WriteConcern()                                | 0    | 0        | false | false
         new WriteConcern(1)                               | 1    | 0        | false | false
@@ -44,36 +56,80 @@ class WriteConcernSpecification extends Specification {
         new WriteConcern(1, 10, false, true)              | 1    | 10       | false | true
         new WriteConcern(1, 10, false, true)              | 1    | 10       | false | true
         new WriteConcern((Object) null, 0, false, false)  | null | 0        | false | false
+=======
+        wc                                                | w          | wTimeout | fsync | journal
+        new WriteConcern()                                | 0          | null     | false | null
+        new WriteConcern(1)                               | 1          | null     | false | null
+        new WriteConcern(1, 10)                           | 1          | 10       | false | null
+        new WriteConcern(true)                            | null       | null     | true  | null
+        new WriteConcern(1, 10, true)                     | 1          | 10       | true  | null
+        new WriteConcern(1, 10, false, true)              | 1          | 10       | false | true
+        new WriteConcern(1, 10, false, true)              | 1          | 10       | false | true
+        new WriteConcern((Object) null, 0, false, false)  | null       | 0        | false | false
+        new WriteConcern('majority')                      | 'majority' | null     | false | null
+        new WriteConcern('dc1', 10, false, true)          | 'dc1'      | 10       | false | true
+        new WriteConcern('dc1', 10, false, true)          | 'dc1'      | 10       | false | true
+>>>>>>> mongodb/master
     }
 
-    @Unroll
-    def 'constructors should set up write concern #wc correctly with wString'() {
+    def 'test journal getters'() {
         expect:
-        wc.getWString() == wString;
-        wc.getWtimeout() == wTimeout;
-        wc.getFsync() == fsync;
-        wc.getJ() == j;
+        wc.getJournal() == journal
+        wc.getJ() == j
 
         where:
-        wc                                       | wString    | wTimeout | fsync | j
-        new WriteConcern('majority')             | 'majority' | 0        | false | false
-        new WriteConcern('dc1', 10, false, true) | 'dc1'      | 10       | false | true
-        new WriteConcern('dc1', 10, false, true) | 'dc1'      | 10       | false | true
+        wc                                        | journal | j
+        new WriteConcern(null, null, null, null)  | null    | false
+        new WriteConcern(null, null, null, false) | false   | false
+        new WriteConcern(null, null, null, true)  | true    | true
     }
 
-    def 'test getters'() {
+    def 'test fsync getters'() {
         expect:
-        wc.isAcknowledged() == getLastError;
-        wc.getWObject() == wObject;
+        wc.getFsync() == fsync
+        wc.fsync() == fsync
 
         where:
-        wc                                      | getLastError | wObject
-        new WriteConcern('dc1', 10, true, true) | true         | 'dc1'
-        new WriteConcern(0, 10, false, true)    | false        | 0
+        wc                                        | fsync
+        new WriteConcern(null, null, null, null)  | false
+        new WriteConcern(null, null, false, null) | false
+        new WriteConcern(null, null, true, null)  | true
     }
 
-    def 'test with methods'() {
+    def 'test wTimeout getters'() {
         expect:
+        wc.getWTimeout(MILLISECONDS) == wTimeout
+        wc.getWTimeout(MICROSECONDS) == (wTimeout == null ? null : wTimeout * 1000)
+        wc.getWtimeout() == (wTimeout == null ? 0 : wTimeout)
+
+        where:
+        wc                                        | wTimeout
+        new WriteConcern(null, null, null, null)  | null
+        new WriteConcern(null, 1000 , null, null) | 1000
+    }
+
+    def 'test wTimeout getter error conditions'() {
+        when:
+        WriteConcern.ACKNOWLEDGED.getWTimeout(null)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def 'test getWObject'() {
+        expect:
+        wc.getWObject() == wObject
+
+        where:
+        wc                        | wObject
+        WriteConcern.ACKNOWLEDGED | null
+        WriteConcern.W1           | 1
+        WriteConcern.MAJORITY     | 'majority'
+    }
+
+    def 'test getWString'() {
+        expect:
+<<<<<<< HEAD
         WriteConcern.W1 == WriteConcern.UNACKNOWLEDGED.withW(1);
         WriteConcern.FSYNCED == WriteConcern.ACKNOWLEDGED.withFsync(true);
         WriteConcern.JOURNALED == WriteConcern.ACKNOWLEDGED.withJ(true);
@@ -85,6 +141,110 @@ class WriteConcernSpecification extends Specification {
         new WriteConcern(2, 0, true, false) == new WriteConcern(2).withFsync(true);
         new WriteConcern(2, 0, false, true) == new WriteConcern(2).withJ(true);
         new WriteConcern(2, 1000, false, false) == new WriteConcern(2).withWTimeout(1000);
+=======
+        wc.getWString() == wString
+
+        where:
+        wc                        | wString
+        WriteConcern.MAJORITY     | 'majority'
+    }
+
+    def 'test getWString error conditions'() {
+        when:
+        wc.getWString()
+
+        then:
+        thrown(IllegalStateException)
+
+        where:
+        wc << [WriteConcern.ACKNOWLEDGED, WriteConcern.W1]
+    }
+
+    def 'test getW'() {
+        expect:
+        wc.getW() == w
+
+        where:
+        wc                          | w
+        WriteConcern.UNACKNOWLEDGED | 0
+        WriteConcern.W1             | 1
+    }
+
+    def 'test getW error conditions'() {
+        when:
+        wc.getW()
+
+        then:
+        thrown(IllegalStateException)
+
+        where:
+        wc << [WriteConcern.ACKNOWLEDGED, WriteConcern.MAJORITY]
+    }
+
+    def 'test withW methods'() {
+        expect:
+        WriteConcern.UNACKNOWLEDGED.withW(1) == new WriteConcern(1, null, null, null);
+        WriteConcern.UNACKNOWLEDGED.withW('dc1') == new WriteConcern('dc1', null, null, null);
+
+        when:
+        WriteConcern.UNACKNOWLEDGED.withW(null)
+
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        WriteConcern.UNACKNOWLEDGED.withW(-1)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def 'test withFsync methods'() {
+        expect:
+        new WriteConcern(null, null, null, null).withFsync(true) == new WriteConcern(null, null, true, null);
+        new WriteConcern(2, 100, false, false).withFsync(true) == new WriteConcern(2, 100, true, false);
+        new WriteConcern(2, 100, true, true).withFsync(false) == new WriteConcern(2, 100, false, true);
+    }
+
+    def 'test withJournal methods'() {
+        expect:
+        new WriteConcern(null, null, null, null).withJournal(true) == new WriteConcern(null, null, null, true);
+        new WriteConcern(2, 100, false, false).withJournal(true) == new WriteConcern(2, 100, false, true);
+        new WriteConcern(2, 100, true, true).withJournal(false) == new WriteConcern(2, 100, true, false);
+        new WriteConcern(2, 100, true, true).withJournal(null) == new WriteConcern(2, 100, true, null);
+
+        new WriteConcern(null, null, null, null).withJ(true) == new WriteConcern(null, null, null, true);
+        new WriteConcern(2, 100, false, false).withJ(true) == new WriteConcern(2, 100, false, true);
+        new WriteConcern(2, 100, true, true).withJ(false) == new WriteConcern(2, 100, true, false);
+    }
+
+    def 'test withWTimeout methods'() {
+        expect:
+        new WriteConcern(null, null, null, null).withWTimeout(0, MILLISECONDS) == new WriteConcern(null, 0, null, null)
+        new WriteConcern(null, null, null, null).withWTimeout(1000, MILLISECONDS) == new WriteConcern(null, 1000, null, null)
+        new WriteConcern(2, null, true, false).withWTimeout(1000, MILLISECONDS) == new WriteConcern(2, 1000, true, false);
+        new WriteConcern(2, null, true, false).withWTimeout(Integer.MAX_VALUE, MILLISECONDS) == new WriteConcern(2, Integer.MAX_VALUE,
+                                                                                                                 true, false);
+        new WriteConcern(2, null, true, false).withWTimeout(100, SECONDS) == new WriteConcern(2, 100000, true, false);
+
+        when:
+        WriteConcern.ACKNOWLEDGED.withWTimeout(0, null)
+
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        WriteConcern.ACKNOWLEDGED.withWTimeout(-1, MILLISECONDS)
+
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        WriteConcern.ACKNOWLEDGED.withWTimeout(Integer.MAX_VALUE + 1, MILLISECONDS)
+
+        then:
+        thrown(IllegalArgumentException)
+>>>>>>> mongodb/master
     }
 
     @Unroll
@@ -98,8 +258,13 @@ class WriteConcernSpecification extends Specification {
         WriteConcern.UNACKNOWLEDGED       | new BsonDocument('w', new BsonInt32(0))
         WriteConcern.ACKNOWLEDGED         | new BsonDocument()
         WriteConcern.W2 | new BsonDocument('w', new BsonInt32(2))
+<<<<<<< HEAD
         WriteConcern.JOURNALED            | new BsonDocument('w', new BsonInt32(1)).append('j', BsonBoolean.TRUE)
         WriteConcern.FSYNCED              | new BsonDocument('w', new BsonInt32(1)).append('fsync', BsonBoolean.TRUE)
+=======
+        WriteConcern.JOURNALED            | new BsonDocument('j', BsonBoolean.TRUE)
+        WriteConcern.FSYNCED              | new BsonDocument('fsync', BsonBoolean.TRUE)
+>>>>>>> mongodb/master
         new WriteConcern('majority')      | new BsonDocument('w', new BsonString('majority'))
         new WriteConcern(2, 100)          | new BsonDocument('w', new BsonInt32(2)).append('wtimeout', new BsonInt32(100))
     }
@@ -129,8 +294,13 @@ class WriteConcernSpecification extends Specification {
         WriteConcern.W1                      | 29791
         WriteConcern.W2                      | 59582
         WriteConcern.MAJORITY                | -1401337973
+<<<<<<< HEAD
         new WriteConcern(1, 0, false, false) | 29791
         new WriteConcern(1, 0, true, true)   | 29823
+=======
+        new WriteConcern(1, 0, false, false) | 69375
+        new WriteConcern(1, 0, true, true)   | 69183
+>>>>>>> mongodb/master
     }
 
     def 'test constants'() {
@@ -138,6 +308,7 @@ class WriteConcernSpecification extends Specification {
         constructedWriteConcern == constantWriteConcern
 
         where:
+<<<<<<< HEAD
         constructedWriteConcern                          | constantWriteConcern
         new WriteConcern((Object) null, 0, false, false) | WriteConcern.ACKNOWLEDGED
         new WriteConcern(1)                              | WriteConcern.W1
@@ -150,6 +321,20 @@ class WriteConcernSpecification extends Specification {
         new WriteConcern(2)                              | WriteConcern.REPLICA_ACKNOWLEDGED
         new WriteConcern(2)                              | WriteConcern.REPLICAS_SAFE
         new WriteConcern('majority')                     | WriteConcern.MAJORITY
+=======
+        constructedWriteConcern                           | constantWriteConcern
+        new WriteConcern((Object) null, null, null, null) | WriteConcern.ACKNOWLEDGED
+        new WriteConcern(1)                               | WriteConcern.W1
+        new WriteConcern(2)                               | WriteConcern.W2
+        new WriteConcern(3)                               | WriteConcern.W3
+        new WriteConcern(0)                               | WriteConcern.UNACKNOWLEDGED
+        WriteConcern.ACKNOWLEDGED.withFsync(true)         | WriteConcern.FSYNCED
+        WriteConcern.ACKNOWLEDGED.withFsync(true)         | WriteConcern.FSYNC_SAFE
+        WriteConcern.ACKNOWLEDGED.withJ(true)             | WriteConcern.JOURNALED
+        new WriteConcern(2)                               | WriteConcern.REPLICA_ACKNOWLEDGED
+        new WriteConcern(2)                               | WriteConcern.REPLICAS_SAFE
+        new WriteConcern('majority')                      | WriteConcern.MAJORITY
+>>>>>>> mongodb/master
     }
 
     def 'test isAcknowledged'() {
@@ -158,6 +343,7 @@ class WriteConcernSpecification extends Specification {
         writeConcern.callGetLastError() == acknowledged
 
         where:
+<<<<<<< HEAD
         writeConcern                        | acknowledged
         WriteConcern.ACKNOWLEDGED           | true
         WriteConcern.W1                     | true
@@ -165,6 +351,20 @@ class WriteConcernSpecification extends Specification {
         WriteConcern.W3                     | true
         WriteConcern.MAJORITY               | true
         WriteConcern.UNACKNOWLEDGED         | false
+=======
+        writeConcern                                               | acknowledged
+        WriteConcern.ACKNOWLEDGED                                  | true
+        WriteConcern.W1                                            | true
+        WriteConcern.W2                                            | true
+        WriteConcern.W3                                            | true
+        WriteConcern.MAJORITY                                      | true
+        WriteConcern.UNACKNOWLEDGED                                | false
+        WriteConcern.UNACKNOWLEDGED.withWTimeout(10, MILLISECONDS) | false
+        WriteConcern.UNACKNOWLEDGED.withFsync(true)                | true
+        WriteConcern.UNACKNOWLEDGED.withJournal(true)              | true
+        WriteConcern.UNACKNOWLEDGED.withFsync(false)               | false
+        WriteConcern.UNACKNOWLEDGED.withJournal(false)             | false
+>>>>>>> mongodb/master
     }
 
     def 'test value of'() {
@@ -182,9 +382,9 @@ class WriteConcernSpecification extends Specification {
         expect:
         WriteConcern.ACKNOWLEDGED.serverDefault
         !WriteConcern.UNACKNOWLEDGED.serverDefault
-        !new WriteConcern(2, 1000).serverDefault
-        !new WriteConcern(1, 0, true, false).serverDefault
-        !new WriteConcern(1, 0, false, true).serverDefault
+        !WriteConcern.ACKNOWLEDGED.withFsync(false).serverDefault
+        !WriteConcern.ACKNOWLEDGED.withJournal(false).serverDefault
+        !WriteConcern.ACKNOWLEDGED.withWTimeout(0, MILLISECONDS).serverDefault
     }
 
     def 'should throw when w is -1'() {
@@ -201,14 +401,6 @@ class WriteConcernSpecification extends Specification {
 
         then:
         thrown(IllegalArgumentException)
-    }
-
-    def 'should throw ClassCastException if w is not an integer and getW is called'() {
-        when:
-        new WriteConcern('MyTag').getW()
-
-        then:
-        thrown(ClassCastException)
     }
 
     def 'majority write concern'() {

@@ -61,6 +61,7 @@ import java.util.List;
 import static com.mongodb.connection.ClusterConnectionMode.MULTIPLE;
 import static com.mongodb.connection.ClusterType.REPLICA_SET;
 import static com.mongodb.connection.ClusterType.SHARDED;
+import static com.mongodb.connection.ClusterType.STANDALONE;
 import static java.lang.Thread.sleep;
 import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -113,6 +114,14 @@ public final class ClusterFixture {
                 .execute(getBinding());
     }
 
+<<<<<<< HEAD
+=======
+    public static Document getServerStatus() {
+        return new CommandWriteOperation<Document>("admin", new BsonDocument("serverStatus", new BsonInt32(1)), new DocumentCodec())
+               .execute(getBinding());
+    }
+
+>>>>>>> mongodb/master
     @SuppressWarnings("unchecked")
     public static boolean isEnterpriseServer() {
         Document buildInfo = getBuildInfo();
@@ -124,6 +133,16 @@ public final class ClusterFixture {
         return modules.contains("enterprise");
     }
 
+<<<<<<< HEAD
+=======
+    public static boolean supportsFsync() {
+        Document serverStatus = getServerStatus();
+        Document storageEngine = (Document) serverStatus.get("storageEngine");
+
+        return storageEngine != null && !storageEngine.get("name").equals("inMemory");
+    }
+
+>>>>>>> mongodb/master
     private static ServerVersion getConnectedServerVersion() {
         ClusterDescription clusterDescription = getCluster().getDescription();
         int retries = 0;
@@ -268,6 +287,10 @@ public final class ClusterFixture {
 
     public static boolean isSharded() {
         return getCluster().getDescription().getType() == SHARDED;
+    }
+
+    public static boolean isStandalone() {
+        return getCluster().getDescription().getType() == STANDALONE;
     }
 
     public static boolean isAuthenticated() {

@@ -16,9 +16,11 @@
 
 package com.mongodb.operation;
 
-import com.mongodb.Function;
+import com.mongodb.MongoClientException;
 import com.mongodb.MongoNamespace;
+import com.mongodb.ReadConcern;
 import com.mongodb.ServerAddress;
+import com.mongodb.WriteConcern;
 import com.mongodb.async.AsyncBatchCursor;
 import com.mongodb.async.SingleResultCallback;
 import com.mongodb.binding.AsyncConnectionSource;
@@ -42,6 +44,7 @@ import java.util.List;
 
 import static com.mongodb.assertions.Assertions.notNull;
 import static com.mongodb.internal.async.ErrorHandlingResultCallback.errorHandlingCallback;
+import static java.lang.String.format;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 
@@ -63,19 +66,40 @@ final class OperationHelper {
         void call(AsyncConnectionSource source, AsyncConnection connection, Throwable t);
     }
 
-    static class IdentityTransformer<T> implements Function<T, T> {
-        @Override
-        public T apply(final T t) {
-            return t;
+    static void checkValidReadConcern(final Connection connection, final ReadConcern readConcern) {
+        if (!serverIsAtLeastVersionThreeDotTwo(connection.getDescription()) && !readConcern.isServerDefault()) {
+            throw new IllegalArgumentException(format("Unsupported ReadConcern : '%s'", readConcern.asDocument().toJson()));
         }
     }
 
-    static class VoidTransformer<T> implements Function<T, Void> {
-        @Override
-        public Void apply(final T t) {
-            return null;
+    static void checkValidReadConcern(final AsyncConnection connection, final ReadConcern readConcern,
+                                      final AsyncCallableWithConnection callable) {
+        Throwable throwable = null;
+        if (!serverIsAtLeastVersionThreeDotTwo(connection.getDescription()) && !readConcern.isServerDefault()) {
+            throwable = new IllegalArgumentException(format("Unsupported ReadConcern : '%s'", readConcern.asDocument().toJson()));
         }
+        callable.call(connection, throwable);
     }
+
+    static void checkValidReadConcern(final AsyncConnectionSource source, final AsyncConnection connection, final ReadConcern readConcern,
+                                      final AsyncCallableWithConnectionAndSource callable) {
+        Throwable throwable = null;
+        if (!serverIsAtLeastVersionThreeDotTwo(connection.getDescription()) && !readConcern.isServerDefault()) {
+            throwable = new IllegalArgumentException(format("Unsupported ReadConcern : '%s'", readConcern.asDocument().toJson()));
+        }
+        callable.call(source, connection, throwable);
+    }
+
+    static boolean bypassDocumentValidationNotSupported(final Boolean bypassDocumentValidation, final WriteConcern writeConcern,
+                                                        final ConnectionDescription description) {
+        return bypassDocumentValidation != null && serverIsAtLeastVersionThreeDotTwo(description) && !writeConcern.isAcknowledged();
+    }
+
+    static MongoClientException getBypassDocumentValidationException() {
+        return new MongoClientException("Specifying bypassDocumentValidation with an unacknowledged WriteConcern "
+                                        + "is not supported");
+    }
+
 
     static <T> QueryBatchCursor<T> createEmptyBatchCursor(final MongoNamespace namespace, final Decoder<T> decoder,
                                                           final ServerAddress serverAddress, final int batchSize) {
@@ -102,7 +126,11 @@ final class OperationHelper {
                                                                     final int batchSize) {
         return new AsyncQueryBatchCursor<T>(OperationHelper.<T>cursorDocumentToQueryResult(cursorDocument,
                                                                                            source.getServerDescription().getAddress()),
+<<<<<<< HEAD
                                             0, batchSize, decoder, source, connection);
+=======
+                                            0, batchSize, 0, decoder, source, connection);
+>>>>>>> mongodb/master
     }
 
 
@@ -129,6 +157,7 @@ final class OperationHelper {
     static <T> SingleResultCallback<T> releasingCallback(final SingleResultCallback<T> wrapped, final AsyncConnectionSource source,
                                                          final AsyncConnection connection) {
         return new ReferenceCountedReleasingWrappedCallback<T>(wrapped, asList(connection, source));
+<<<<<<< HEAD
     }
 
     static <T> SingleResultCallback<T> releasingCallback(final SingleResultCallback<T> wrapped,
@@ -138,6 +167,17 @@ final class OperationHelper {
         return new ReferenceCountedReleasingWrappedCallback<T>(wrapped, asList(readBinding, connection, source));
     }
 
+=======
+    }
+
+    static <T> SingleResultCallback<T> releasingCallback(final SingleResultCallback<T> wrapped,
+                                                         final AsyncReadBinding readBinding,
+                                                         final AsyncConnectionSource source,
+                                                         final AsyncConnection connection) {
+        return new ReferenceCountedReleasingWrappedCallback<T>(wrapped, asList(readBinding, connection, source));
+    }
+
+>>>>>>> mongodb/master
     private static class ReferenceCountedReleasingWrappedCallback<T> implements SingleResultCallback<T> {
         private final SingleResultCallback<T> wrapped;
         private final List<? extends ReferenceCounted> referenceCounted;
@@ -166,7 +206,11 @@ final class OperationHelper {
     }
 
     static boolean serverIsAtLeastVersionThreeDotTwo(final ConnectionDescription description) {
+<<<<<<< HEAD
         return serverIsAtLeastVersion(description, new ServerVersion(asList(3, 1, 7)));
+=======
+        return serverIsAtLeastVersion(description, new ServerVersion(asList(3, 1, 9)));
+>>>>>>> mongodb/master
     }
 
     static boolean serverIsAtLeastVersion(final ConnectionDescription description, final ServerVersion serverVersion) {

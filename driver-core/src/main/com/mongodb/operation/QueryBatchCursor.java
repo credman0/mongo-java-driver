@@ -33,6 +33,7 @@ import org.bson.codecs.Decoder;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import static com.mongodb.assertions.Assertions.isTrueArgument;
 import static com.mongodb.assertions.Assertions.notNull;
 import static com.mongodb.operation.CursorHelper.getNumberToReturn;
 import static com.mongodb.operation.OperationHelper.getMoreCursorDocumentToQueryResult;
@@ -45,6 +46,7 @@ class QueryBatchCursor<T> implements BatchCursor<T> {
     private final int limit;
     private final Decoder<T> decoder;
     private final ConnectionSource connectionSource;
+    private final long maxTimeMS;
     private int batchSize;
     private ServerCursor serverCursor;
     private List<T> nextBatch;
@@ -57,11 +59,13 @@ class QueryBatchCursor<T> implements BatchCursor<T> {
 
     QueryBatchCursor(final QueryResult<T> firstQueryResult, final int limit, final int batchSize,
                      final Decoder<T> decoder, final ConnectionSource connectionSource) {
-        this(firstQueryResult, limit, batchSize, decoder, connectionSource, null);
+        this(firstQueryResult, limit, batchSize, 0, decoder, connectionSource, null);
     }
 
-    QueryBatchCursor(final QueryResult<T> firstQueryResult, final int limit, final int batchSize,
+    QueryBatchCursor(final QueryResult<T> firstQueryResult, final int limit, final int batchSize, final long maxTimeMS,
                      final Decoder<T> decoder, final ConnectionSource connectionSource, final Connection connection) {
+        isTrueArgument("maxTimeMS >= 0", maxTimeMS >= 0);
+        this.maxTimeMS = maxTimeMS;
         this.namespace = firstQueryResult.getNamespace();
         this.limit = limit;
         this.batchSize = batchSize;
@@ -77,7 +81,6 @@ class QueryBatchCursor<T> implements BatchCursor<T> {
 
         initFromQueryResult(firstQueryResult);
         if (limitReached()) {
-            notNull("connection", connection);
             killCursor(connection);
         }
     }
@@ -205,7 +208,11 @@ class QueryBatchCursor<T> implements BatchCursor<T> {
                 try {
                     initFromCommandResult(connection.command(namespace.getDatabaseName(),
                                                              asGetMoreCommandDocument(),
+<<<<<<< HEAD
                                                              true,
+=======
+                                                             false,
+>>>>>>> mongodb/master
                                                              new NoOpFieldNameValidator(),
                                                              CommandResultDocumentCodec.create(decoder, "nextBatch")));
                 } catch (MongoCommandException e) {
@@ -228,8 +235,17 @@ class QueryBatchCursor<T> implements BatchCursor<T> {
         BsonDocument document = new BsonDocument("getMore", new BsonInt64(serverCursor.getId()))
                                 .append("collection", new BsonString(namespace.getCollectionName()));
 
+<<<<<<< HEAD
         if (batchSize != 0) {
             document.append("batchSize", new BsonInt32(Math.abs(batchSize)));
+=======
+        int batchSizeForGetMoreCommand = Math.abs(getNumberToReturn(limit, this.batchSize, count));
+        if (batchSizeForGetMoreCommand != 0) {
+            document.append("batchSize", new BsonInt32(batchSizeForGetMoreCommand));
+        }
+        if (maxTimeMS != 0) {
+            document.append("maxTimeMS", new BsonInt64(maxTimeMS));
+>>>>>>> mongodb/master
         }
 
         return document;
@@ -248,7 +264,7 @@ class QueryBatchCursor<T> implements BatchCursor<T> {
     }
 
     private boolean limitReached() {
-        return limit != 0 && count >= limit;
+        return Math.abs(limit) != 0 && count >= Math.abs(limit);
     }
 
     private void killCursor() {
@@ -264,6 +280,10 @@ class QueryBatchCursor<T> implements BatchCursor<T> {
 
     private void killCursor(final Connection connection) {
         if (serverCursor != null) {
+<<<<<<< HEAD
+=======
+            notNull("connection", connection);
+>>>>>>> mongodb/master
             connection.killCursor(namespace, singletonList(serverCursor.getId()));
             serverCursor = null;
         }

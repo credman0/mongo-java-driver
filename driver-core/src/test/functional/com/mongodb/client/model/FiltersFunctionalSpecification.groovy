@@ -28,6 +28,10 @@ import java.util.regex.Pattern
 import static com.mongodb.ClusterFixture.serverVersionAtLeast
 import static com.mongodb.client.model.Filters.all
 import static com.mongodb.client.model.Filters.and
+import static com.mongodb.client.model.Filters.bitsAllClear
+import static com.mongodb.client.model.Filters.bitsAllSet
+import static com.mongodb.client.model.Filters.bitsAnyClear
+import static com.mongodb.client.model.Filters.bitsAnySet
 import static com.mongodb.client.model.Filters.elemMatch
 import static com.mongodb.client.model.Filters.eq
 import static com.mongodb.client.model.Filters.exists
@@ -190,6 +194,50 @@ class FiltersFunctionalSpecification extends OperationFunctionalSpecification {
         find(size('a', 4)) == [b]
     }
 
+    @IgnoreIf({ !serverVersionAtLeast([3, 1, 10]) })
+    def 'should render $bitsAllClear'() {
+        when:
+        def bitDoc = Document.parse('{_id: 1, bits: 20}')
+        getCollectionHelper().drop()
+        getCollectionHelper().insertDocuments(bitDoc)
+
+        then:
+        find(bitsAllClear('bits', 35)) == [bitDoc]
+    }
+
+    @IgnoreIf({ !serverVersionAtLeast([3, 1, 10]) })
+    def 'should render $bitsAllSet'() {
+        when:
+        def bitDoc = Document.parse('{_id: 1, bits: 54}')
+        getCollectionHelper().drop()
+        getCollectionHelper().insertDocuments(bitDoc)
+
+        then:
+        find(bitsAllSet('bits', 50)) == [bitDoc]
+    }
+
+    @IgnoreIf({ !serverVersionAtLeast([3, 1, 10]) })
+    def 'should render $bitsAnyClear'() {
+        when:
+        def bitDoc = Document.parse('{_id: 1, bits: 50}')
+        getCollectionHelper().drop()
+        getCollectionHelper().insertDocuments(bitDoc)
+
+        then:
+        find(bitsAnyClear('bits', 20)) == [bitDoc]
+    }
+
+    @IgnoreIf({ !serverVersionAtLeast([3, 1, 10]) })
+    def 'should render $bitsAnySet'() {
+        when:
+        def bitDoc = Document.parse('{_id: 1, bits: 20}')
+        getCollectionHelper().drop()
+        getCollectionHelper().insertDocuments(bitDoc)
+
+        then:
+        find(bitsAnySet('bits', 50)) == [bitDoc]
+    }
+
     def 'should render $type'() {
         expect:
         find(type('x', BsonType.INT32)) == [a, b, c]
@@ -214,6 +262,7 @@ class FiltersFunctionalSpecification extends OperationFunctionalSpecification {
         find(text('GIANT')) == [textDocument]
         find(text('GIANT', 'english')) == [textDocument]
         find(text('GIANT', new TextSearchOptions().language('english'))) == [textDocument]
+<<<<<<< HEAD
     }
 
     @IgnoreIf({ !serverVersionAtLeast([3, 1, 8]) })
@@ -235,6 +284,29 @@ class FiltersFunctionalSpecification extends OperationFunctionalSpecification {
         find(text('idéias', new TextSearchOptions().language('english'))) == []
     }
 
+=======
+    }
+
+    @IgnoreIf({ !serverVersionAtLeast([3, 1, 8]) })
+    def 'should render $text with 3.2 options'() {
+        given:
+        collectionHelper.drop()
+        getCollectionHelper().createIndex(new Document('desc', 'text'), 'portuguese')
+
+        when:
+        def textDocument = new Document('_id', 1).append('desc', 'mongodb para idéias GIGANTES')
+        collectionHelper.insertDocuments(textDocument)
+
+        then:
+        find(text('idéias')) == [textDocument]
+        find(text('ideias', new TextSearchOptions())) == [textDocument]
+        find(text('ideias', new TextSearchOptions().caseSensitive(false).diacriticSensitive(false))) == [textDocument]
+        find(text('IDéIAS', new TextSearchOptions().caseSensitive(false).diacriticSensitive(true))) == [textDocument]
+        find(text('ideias', new TextSearchOptions().caseSensitive(true).diacriticSensitive(true))) == []
+        find(text('idéias', new TextSearchOptions().language('english'))) == []
+    }
+
+>>>>>>> mongodb/master
 
     def 'should render $regex'() {
         expect:

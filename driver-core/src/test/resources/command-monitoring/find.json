@@ -399,6 +399,10 @@
     {
       "description": "A successful find event with a getmore and the server kills the cursor",
       "ignore_if_server_version_less_than": "3.1",
+<<<<<<< HEAD
+=======
+      "ignore_if_topology_type" : ["sharded"],
+>>>>>>> mongodb/master
       "operation": {
         "name": "find",
         "arguments": {
@@ -469,7 +473,11 @@
                 "$numberLong": "42"
               },
               "collection": "test",
+<<<<<<< HEAD
               "batchSize": 3
+=======
+              "batchSize": 1
+>>>>>>> mongodb/master
             },
             "command_name": "getMore",
             "database_name": "command-monitoring-tests"

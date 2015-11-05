@@ -20,11 +20,15 @@ import category.Async
 import category.Slow
 import com.mongodb.Block
 import com.mongodb.ClusterFixture
+<<<<<<< HEAD
 import com.mongodb.CursorType
+=======
+>>>>>>> mongodb/master
 import com.mongodb.MongoExecutionTimeoutException
 import com.mongodb.MongoNamespace
 import com.mongodb.MongoQueryException
 import com.mongodb.OperationFunctionalSpecification
+import com.mongodb.ReadConcern
 import com.mongodb.ReadPreference
 import com.mongodb.ServerAddress
 import com.mongodb.async.SingleResultCallback
@@ -62,13 +66,87 @@ import static com.mongodb.ClusterFixture.getCluster
 import static com.mongodb.ClusterFixture.isSharded
 import static com.mongodb.ClusterFixture.loopCursor
 import static com.mongodb.ClusterFixture.serverVersionAtLeast
+<<<<<<< HEAD
+=======
+import static com.mongodb.CursorType.NonTailable
+import static com.mongodb.CursorType.Tailable
+import static com.mongodb.CursorType.TailableAwait
+>>>>>>> mongodb/master
 import static com.mongodb.ExplainVerbosity.QUERY_PLANNER
 import static com.mongodb.connection.ServerType.STANDALONE
 import static java.util.Arrays.asList
 import static java.util.concurrent.TimeUnit.MILLISECONDS
+<<<<<<< HEAD
+=======
+import static java.util.concurrent.TimeUnit.SECONDS
+>>>>>>> mongodb/master
 import static org.junit.Assert.assertEquals
 
 class FindOperationSpecification extends OperationFunctionalSpecification {
+
+    def 'should have the correct defaults'() {
+        given:
+        def decoder = new DocumentCodec()
+
+        when:
+        FindOperation operation = new FindOperation<Document>(getNamespace(), decoder)
+
+        then:
+        operation.getNamespace() == getNamespace()
+        operation.getDecoder() == decoder
+        operation.getFilter() == null
+        operation.getMaxTime(MILLISECONDS) == 0
+        operation.getMaxAwaitTime(MILLISECONDS) == 0
+        operation.getLimit() == 0
+        operation.getSkip() == 0
+        operation.getBatchSize() == 0
+        operation.getModifiers() == null
+        operation.getProjection() == null
+        operation.getReadConcern() == ReadConcern.DEFAULT
+        !operation.isNoCursorTimeout()
+        !operation.isOplogReplay()
+        !operation.isPartial()
+        !operation.isSlaveOk()
+    }
+
+    def 'should set optional values correctly'(){
+        given:
+        def filter = new BsonDocument('filter', new BsonInt32(1))
+        def projection = new BsonDocument('projection', new BsonInt32(1))
+        def modifiers = new BsonDocument('modifiers', new BsonInt32(1))
+
+        when:
+        FindOperation operation = new FindOperation<Document>(getNamespace(), new DocumentCodec())
+                .maxTime(10, SECONDS)
+                .maxAwaitTime(20, SECONDS)
+                .filter(filter)
+                .limit(20)
+                .skip(30)
+                .batchSize(40)
+                .projection(projection)
+                .modifiers(modifiers)
+                .cursorType(Tailable)
+                .readConcern(ReadConcern.MAJORITY)
+                .partial(true)
+                .slaveOk(true)
+                .oplogReplay(true)
+                .noCursorTimeout(true)
+
+        then:
+        operation.getFilter() == filter
+        operation.getMaxTime(MILLISECONDS) == 10000
+        operation.getMaxAwaitTime(MILLISECONDS) == 20000
+        operation.getLimit() == 20
+        operation.getSkip() == 30
+        operation.getBatchSize() == 40
+        operation.getProjection() == projection
+        operation.getModifiers() == modifiers
+        operation.getReadConcern() == ReadConcern.MAJORITY
+        operation.isNoCursorTimeout()
+        operation.isOplogReplay()
+        operation.isPartial()
+        operation.isSlaveOk()
+    }
 
     def 'should query with default values'() {
         def document = new Document('_id', 1)
@@ -452,9 +530,7 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
     @IgnoreIf({ isSharded() })
     def 'should iterate asynchronously'() {
         given:
-        (1..500).each {
-            collectionHelper.insertDocuments(new DocumentCodec(), new Document('_id', it))
-        }
+        collectionHelper.insertDocuments(new DocumentCodec(), (1..500).collect { new Document('_id', it) })
         def findOperation = new FindOperation<Document>(getNamespace(), new DocumentCodec())
 
         when:
@@ -558,7 +634,11 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
         given:
         collectionHelper.create(getCollectionName(), new CreateCollectionOptions().capped(true).sizeInBytes(1000))
         def operation = new FindOperation<BsonDocument>(namespace, new BsonDocumentCodec())
+<<<<<<< HEAD
                 .cursorType(CursorType.TailableAwait)
+=======
+                .cursorType(TailableAwait)
+>>>>>>> mongodb/master
 
         when:
         operation.execute(getBinding())
@@ -567,6 +647,49 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
         true
     }
 
+<<<<<<< HEAD
+=======
+    def 'should apply maxAwaitTime'() {
+        given:
+        collectionHelper.create(getCollectionName(), new CreateCollectionOptions().capped(true).sizeInBytes(1000))
+        def operation = new FindOperation<BsonDocument>(namespace, new BsonDocumentCodec())
+                .cursorType(cursorType)
+                .maxAwaitTime(maxAwaitTimeMS, MILLISECONDS)
+
+        when:
+        def cursor = operation.execute(getBinding()) as QueryBatchCursor
+
+        then:
+        cursor.maxTimeMS == maxTimeMSForCursor
+
+        where:
+        cursorType    |  maxAwaitTimeMS  | maxTimeMSForCursor
+        NonTailable   |  100             | 0
+        Tailable      |  100             | 0
+        TailableAwait |  100             | 100
+    }
+
+    def 'should apply maxAwaitTime asynchronously'() {
+        given:
+        collectionHelper.create(getCollectionName(), new CreateCollectionOptions().capped(true).sizeInBytes(1000))
+        def operation = new FindOperation<BsonDocument>(namespace, new BsonDocumentCodec())
+                .cursorType(cursorType)
+                .maxAwaitTime(maxAwaitTimeMS, MILLISECONDS)
+
+        when:
+        def cursor = executeAsync(operation) as AsyncQueryBatchCursor
+
+        then:
+        cursor.maxTimeMS == maxTimeMSForCursor
+
+        where:
+        cursorType    |  maxAwaitTimeMS  | maxTimeMSForCursor
+        NonTailable   |  100             | 0
+        Tailable      |  100             | 0
+        TailableAwait |  100             | 100
+    }
+
+>>>>>>> mongodb/master
     // sanity check that the server accepts the miscallaneous flags
     def 'should pass miscallaneous flags through'() {
         given:
@@ -608,7 +731,11 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
                 .skip(2)
                 .limit(100)
                 .batchSize(10)
+<<<<<<< HEAD
                 .cursorType(CursorType.TailableAwait)
+=======
+                .cursorType(TailableAwait)
+>>>>>>> mongodb/master
                 .oplogReplay(true)
                 .noCursorTimeout(true)
                 .partial(true)
@@ -642,7 +769,13 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
         def readPreference = ReadPreference.secondary()
         def connectionDescription = new ConnectionDescription(new ConnectionId(new ServerId(new ClusterId(), new ServerAddress())),
                                                               serverVersion, STANDALONE, 1000, 16000000, 48000000)
+<<<<<<< HEAD
         def connection = Mock(Connection)
+=======
+        def connection = Mock(Connection) {
+            _ * getDescription() >> connectionDescription
+        }
+>>>>>>> mongodb/master
         def connectionSource = Stub(ConnectionSource) {
             getConnection() >> connection
         }
@@ -650,20 +783,49 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
             getReadPreference() >> readPreference
             getReadConnectionSource() >> connectionSource
         }
+<<<<<<< HEAD
         def operation = new FindOperation<BsonDocument>(namespace, decoder)
                 .filter(new BsonDocument('a', BsonBoolean.TRUE))
+=======
+        def cannedResult = new BsonDocument('cursor', new BsonDocument('id', new BsonInt64(0))
+                .append('ns', new BsonString('db.coll'))
+                .append('firstBatch', new BsonArrayWrapper([])))
+        def operation = new FindOperation<BsonDocument>(namespace, decoder)
+        def expectedCommand = new BsonDocument('find', new BsonString(collectionName))
+
+        when:
+        operation.execute(readBinding)
+
+        then:
+        1 * connection.command(namespace.getDatabaseName(), expectedCommand, readPreference.isSlaveOk(), _, _) >> cannedResult
+        1 * connection.release()
+
+        when:
+        operation.filter(new BsonDocument('a', BsonBoolean.TRUE))
+>>>>>>> mongodb/master
                 .projection(new BsonDocument('x', new BsonInt32(1)))
                 .skip(2)
                 .limit(limit)
                 .batchSize(batchSize)
+<<<<<<< HEAD
                 .cursorType(CursorType.TailableAwait)
+=======
+                .cursorType(TailableAwait)
+>>>>>>> mongodb/master
                 .oplogReplay(true)
                 .noCursorTimeout(true)
                 .partial(true)
                 .oplogReplay(true)
                 .modifiers(new BsonDocument('$snapshot', BsonBoolean.TRUE))
+<<<<<<< HEAD
         def expectedCommand = new BsonDocument('find', new BsonString(collectionName))
                 .append('filter', operation.getFilter())
+=======
+                .maxTime(10, MILLISECONDS)
+                .readConcern(ReadConcern.MAJORITY)
+
+        expectedCommand.append('filter', operation.getFilter())
+>>>>>>> mongodb/master
                 .append('projection', operation.getProjection())
                 .append('skip', new BsonInt32(operation.getSkip()))
                 .append('tailable', BsonBoolean.TRUE)
@@ -672,6 +834,7 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
                 .append('noCursorTimeout', BsonBoolean.TRUE)
                 .append('oplogReplay', BsonBoolean.TRUE)
                 .append('snapshot', BsonBoolean.TRUE)
+<<<<<<< HEAD
         if (limit != 0) {
             expectedCommand.append('limit', new BsonInt32(Math.abs(limit)))
         }
@@ -692,11 +855,36 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
         new BsonDocument('cursor', new BsonDocument('id', new BsonInt64(0))
                 .append('ns', new BsonString('db.coll'))
                 .append('firstBatch', new BsonArrayWrapper([])))
+=======
+                .append('maxTimeMS', new BsonInt64(operation.getMaxTime(MILLISECONDS)))
+                .append('readConcern', new BsonDocument('level', new BsonString('majority')))
+
+        if (commandLimit != null) {
+            expectedCommand.append('limit', new BsonInt32(commandLimit))
+        }
+        if (commandBatchSize != null) {
+            expectedCommand.append('batchSize', new BsonInt32(commandBatchSize))
+        }
+        if (commandSingleBatch != null) {
+            expectedCommand.append('singleBatch', BsonBoolean.valueOf(commandSingleBatch))
+        }
+
+        operation.execute(readBinding)
+
+        then:
+        1 * connection.command(namespace.getDatabaseName(), expectedCommand, readPreference.isSlaveOk(), _, _) >> cannedResult
+>>>>>>> mongodb/master
         1 * connection.release()
 
         where:
         limit << [100, -100, 100, 0, 100]
         batchSize << [10, 10, -10, 10, 0]
+<<<<<<< HEAD
+=======
+        commandLimit << [100, 100, 10, null, 100]
+        commandBatchSize << [10, null, null, 10, null]
+        commandSingleBatch << [null, true, true, null, null]
+>>>>>>> mongodb/master
     }
 
     def 'should use the ReadBindings readPreference to set slaveOK'() {
@@ -705,6 +893,7 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
         def collectionName = 'coll'
         def namespace = new MongoNamespace(dbName, collectionName)
         def decoder = Stub(Decoder)
+<<<<<<< HEAD
         def readBinding = Mock(ReadBinding)
         def readPreference = Mock(ReadPreference)
         def connectionSource = Mock(ConnectionSource)
@@ -712,12 +901,32 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
         def connectionDescription = new ConnectionDescription(new ConnectionId(new ServerId(new ClusterId(), new ServerAddress())),
                                                               new ServerVersion(3, 0), STANDALONE, 1000, 16000000, 48000000)
         def queryResult = Mock(QueryResult)
+=======
+        def connectionDescription = new ConnectionDescription(new ConnectionId(new ServerId(new ClusterId(), new ServerAddress())),
+                                                              new ServerVersion(3, 0), STANDALONE, 1000, 16000000, 48000000)
+        def connection = Mock(Connection) {
+            _ * getDescription() >> connectionDescription
+        }
+        def readBinding = Stub(ReadBinding) {
+            getReadConnectionSource() >> Stub(ConnectionSource) {
+                getConnection() >> connection
+            }
+            getReadPreference() >> Stub(ReadPreference) {
+                isSlaveOk() >> slaveOk
+            }
+        }
+        def queryResult = Mock(QueryResult) {
+            _ * getNamespace() >> namespace
+            _ * getResults() >> []
+        }
+>>>>>>> mongodb/master
         def operation = new FindOperation<BsonDocument>(namespace, decoder)
 
         when:
         operation.execute(readBinding)
 
         then:
+<<<<<<< HEAD
         1 * readBinding.getReadConnectionSource() >> connectionSource
         2 * readBinding.getReadPreference() >> readPreference
         1 * connectionSource.getConnection() >> connection
@@ -726,8 +935,10 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
         1 * connection.query(namespace, _, _, _, _, _, slaveOk, _, _, _, _, _, _) >> queryResult
         1 * queryResult.getNamespace() >> namespace
         2 * queryResult.getResults() >> []
+=======
+        1 * connection.query(namespace, _, _, _, _, _, slaveOk, _, _, _, _, _, _) >> queryResult
+>>>>>>> mongodb/master
         1 * connection.release()
-        1 * connectionSource.release()
 
         where:
         slaveOk << [true, false]
@@ -739,6 +950,7 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
         def collectionName = 'coll'
         def namespace = new MongoNamespace(dbName, collectionName)
         def decoder = Stub(Decoder)
+<<<<<<< HEAD
         def readBinding = Mock(AsyncReadBinding)
         def readPreference = Mock(ReadPreference)
         def connectionSource = Mock(AsyncConnectionSource)
@@ -746,12 +958,34 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
         def connectionDescription = new ConnectionDescription(new ConnectionId(new ServerId(new ClusterId(), new ServerAddress())),
                                                               new ServerVersion(3, 0), STANDALONE, 1000, 16000000, 48000000)
         def queryResult = Mock(QueryResult)
+=======
+        def connectionDescription = new ConnectionDescription(new ConnectionId(new ServerId(new ClusterId(), new ServerAddress())),
+                                                              new ServerVersion(3, 0), STANDALONE, 1000, 16000000, 48000000)
+
+        def connection = Mock(AsyncConnection) {
+            _ * getDescription() >> connectionDescription
+        }
+        def connectionSource = Stub(AsyncConnectionSource) {
+            getConnection(_) >> { it[0].onResult(connection, null) }
+        }
+        def readBinding = Stub(AsyncReadBinding) {
+            getReadConnectionSource(_) >>  { it[0].onResult(connectionSource, null) }
+            getReadPreference() >> Stub(ReadPreference) {
+                isSlaveOk() >> slaveOk
+            }
+        }
+        def queryResult = Mock(QueryResult) {
+            _ * getNamespace() >> namespace
+            _ * getResults() >> []
+        }
+>>>>>>> mongodb/master
         def operation = new FindOperation<BsonDocument>(namespace, decoder)
 
         when:
         operation.executeAsync(readBinding, Stub(SingleResultCallback))
 
         then:
+<<<<<<< HEAD
         2 * readBinding.getReadPreference() >> readPreference
         1 * readBinding.getReadConnectionSource(_) >> { it[0].onResult(connectionSource, null) }
         1 * connectionSource.getConnection(_) >> { it[0].onResult(connection, null) }
@@ -760,8 +994,10 @@ class FindOperationSpecification extends OperationFunctionalSpecification {
         1 * connection.queryAsync(namespace, _, _, _, _, _, slaveOk, _, _, _, _, _, _, _) >> { it[13].onResult(queryResult, null) }
         1 * queryResult.getNamespace() >> namespace
         1 * queryResult.getResults() >> []
+=======
+        1 * connection.queryAsync(namespace, _, _, _, _, _, slaveOk, _, _, _, _, _, _, _) >> { it[13].onResult(queryResult, null) }
+>>>>>>> mongodb/master
         1 * connection.release()
-        1 * connectionSource.release()
 
         where:
         slaveOk << [true, false]

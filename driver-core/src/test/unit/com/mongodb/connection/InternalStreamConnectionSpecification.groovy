@@ -17,7 +17,7 @@
 package com.mongodb.connection
 
 import category.Async
-import category.Slow
+import category.SlowUnit
 import com.mongodb.MongoInternalException
 import com.mongodb.MongoNamespace
 import com.mongodb.MongoSocketClosedException
@@ -577,7 +577,8 @@ class InternalStreamConnectionSpecification extends Specification {
         }
     }
 
-    @Category(Slow)
+    @IgnoreIf({ System.getProperty('ignoreSlowUnitTests') == 'true' })
+    @Category(SlowUnit)
     def 'should have threadsafe connection pipelining'() {
         given:
         int threads = 10
@@ -612,8 +613,8 @@ class InternalStreamConnectionSpecification extends Specification {
         pool.shutdown()
     }
 
-    @Category([Async, Slow])
-    @IgnoreIf({ javaVersion < 1.7 })
+    @Category([Async, SlowUnit])
+    @IgnoreIf({ System.getProperty('ignoreSlowUnitTests') == 'true' || javaVersion < 1.7 })
     def 'should have threadsafe connection pipelining asynchronously'() {
         given:
         int threads = 10
