@@ -58,13 +58,6 @@ class AsyncQueryBatchCursor<T> implements AsyncBatchCursor<T> {
 
     AsyncQueryBatchCursor(final QueryResult<T> firstBatch, final int limit, final int batchSize,
                           final Decoder<T> decoder) {
-<<<<<<< HEAD
-        this(firstBatch, limit, batchSize, decoder, null, null);
-    }
-
-    AsyncQueryBatchCursor(final QueryResult<T> firstBatch, final int limit, final int batchSize,
-                          final Decoder<T> decoder, final AsyncConnectionSource connectionSource, final AsyncConnection connection) {
-=======
         this(firstBatch, limit, batchSize, 0, decoder, null, null);
     }
 
@@ -72,7 +65,6 @@ class AsyncQueryBatchCursor<T> implements AsyncBatchCursor<T> {
                           final Decoder<T> decoder, final AsyncConnectionSource connectionSource, final AsyncConnection connection) {
         isTrueArgument("maxTimeMS >= 0", maxTimeMS >= 0);
         this.maxTimeMS = maxTimeMS;
->>>>>>> mongodb/master
         this.namespace = firstBatch.getNamespace();
         this.firstBatch = firstBatch;
         this.limit = limit;
@@ -160,11 +152,7 @@ class AsyncQueryBatchCursor<T> implements AsyncBatchCursor<T> {
 
     private void getMore(final AsyncConnection connection, final SingleResultCallback<List<T>> callback) {
         if (serverIsAtLeastVersionThreeDotTwo(connection.getDescription())) {
-<<<<<<< HEAD
-            connection.commandAsync(namespace.getDatabaseName(), asGetMoreCommandDocument(), true,
-=======
             connection.commandAsync(namespace.getDatabaseName(), asGetMoreCommandDocument(), false,
->>>>>>> mongodb/master
                                     new NoOpFieldNameValidator(), CommandResultDocumentCodec.create(decoder, "nextBatch"),
                                     new CommandResultSingleResultCallback(connection, callback));
 
@@ -178,12 +166,6 @@ class AsyncQueryBatchCursor<T> implements AsyncBatchCursor<T> {
         BsonDocument document = new BsonDocument("getMore", new BsonInt64(cursor.getId()))
                                 .append("collection", new BsonString(namespace.getCollectionName()));
 
-<<<<<<< HEAD
-        if (batchSize != 0) {
-            document.append("batchSize", new BsonInt32(Math.abs(batchSize)));
-        }
-
-=======
         int batchSizeForGetMoreCommand = Math.abs(getNumberToReturn(limit, this.batchSize, count));
         if (batchSizeForGetMoreCommand != 0) {
             document.append("batchSize", new BsonInt32(batchSizeForGetMoreCommand));
@@ -191,7 +173,6 @@ class AsyncQueryBatchCursor<T> implements AsyncBatchCursor<T> {
         if (maxTimeMS != 0) {
             document.append("maxTimeMS", new BsonInt64(maxTimeMS));
         }
->>>>>>> mongodb/master
         return document;
     }
 

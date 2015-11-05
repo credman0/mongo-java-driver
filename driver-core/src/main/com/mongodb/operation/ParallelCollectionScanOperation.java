@@ -158,11 +158,6 @@ public class ParallelCollectionScanOperation<T> implements AsyncReadOperation<Li
                 if (t != null) {
                     errorHandlingCallback(callback).onResult(null, t);
                 } else {
-<<<<<<< HEAD
-                    executeWrappedCommandProtocolAsync(binding, namespace.getDatabaseName(), getCommand(),
-                            CommandResultDocumentCodec.create(decoder, "firstBatch"), connection, asyncTransformer(source, connection),
-                            releasingCallback(errorHandlingCallback(callback), source, connection));
-=======
                     final SingleResultCallback<List<AsyncBatchCursor<T>>> wrappedCallback = releasingCallback(
                             errorHandlingCallback(callback), source, connection);
                     checkValidReadConcern(source, connection, readConcern, new AsyncCallableWithConnectionAndSource() {
@@ -177,7 +172,6 @@ public class ParallelCollectionScanOperation<T> implements AsyncReadOperation<Li
                             }
                         }
                     });
->>>>>>> mongodb/master
                 }
             }
         });
@@ -198,26 +192,16 @@ public class ParallelCollectionScanOperation<T> implements AsyncReadOperation<Li
         };
     }
 
-<<<<<<< HEAD
-    private Function<BsonDocument, List<AsyncBatchCursor<T>>> asyncTransformer(final AsyncConnectionSource source,
-                                                                               final AsyncConnection connection) {
-        return new Function<BsonDocument, List<AsyncBatchCursor<T>>>() {
-=======
     private CommandTransformer<BsonDocument, List<AsyncBatchCursor<T>>> asyncTransformer(final AsyncConnectionSource source,
                                                                                final AsyncConnection connection) {
         return new CommandTransformer<BsonDocument, List<AsyncBatchCursor<T>>>() {
->>>>>>> mongodb/master
             @Override
             public List<AsyncBatchCursor<T>> apply(final BsonDocument result, final ServerAddress serverAddress) {
                 List<AsyncBatchCursor<T>> cursors = new ArrayList<AsyncBatchCursor<T>>();
                 for (BsonValue cursorValue : getCursorDocuments(result)) {
                     cursors.add(new AsyncQueryBatchCursor<T>(createQueryResult(getCursorDocument(cursorValue.asDocument()),
                                                                                           source.getServerDescription().getAddress()),
-<<<<<<< HEAD
-                                                             0, getBatchSize(), decoder, source, connection));
-=======
                                                              0, getBatchSize(), 0, decoder, source, connection));
->>>>>>> mongodb/master
                 }
                 return cursors;
             }

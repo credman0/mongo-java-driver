@@ -56,11 +56,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-<<<<<<< HEAD
-=======
 import static com.mongodb.ClusterFixture.isDiscoverableReplicaSet;
 import static com.mongodb.ClusterFixture.isSharded;
->>>>>>> mongodb/master
 import static com.mongodb.ClusterFixture.serverVersionAtLeast;
 import static com.mongodb.Fixture.getMongoClientURI;
 import static java.util.Arrays.asList;
@@ -116,8 +113,6 @@ public class CommandMonitoringTest {
         if (definition.containsKey("ignore_if_server_version_greater_than")) {
             assumeFalse(serverVersion.compareTo(getServerVersion("ignore_if_server_version_greater_than")) > 0);
         }
-<<<<<<< HEAD
-=======
         if (definition.containsKey("ignore_if_topology_type")) {
             BsonArray topologyTypes = definition.getArray("ignore_if_topology_type");
             for (BsonValue type : topologyTypes) {
@@ -131,7 +126,6 @@ public class CommandMonitoringTest {
                 }
             }
         }
->>>>>>> mongodb/master
 
         List<BsonDocument> documents = new ArrayList<BsonDocument>();
         for (BsonValue document : data) {

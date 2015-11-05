@@ -168,11 +168,6 @@ public class DistinctOperation<T> implements AsyncReadOperation<AsyncBatchCursor
                 if (t != null) {
                     errorHandlingCallback(callback).onResult(null, t);
                 } else {
-<<<<<<< HEAD
-                    executeWrappedCommandProtocolAsync(binding, namespace.getDatabaseName(), getCommand(), createCommandDecoder(),
-                            connection, asyncTransformer(connection.getDescription()),
-                            releasingCallback(errorHandlingCallback(callback), source, connection));
-=======
                     final SingleResultCallback<AsyncBatchCursor<T>> wrappedCallback = releasingCallback(
                             errorHandlingCallback(callback), source, connection);
                     checkValidReadConcern(source, connection, readConcern, new AsyncCallableWithConnectionAndSource() {
@@ -187,7 +182,6 @@ public class DistinctOperation<T> implements AsyncReadOperation<AsyncBatchCursor
                             }
                         }
                     });
->>>>>>> mongodb/master
                 }
             }
         });
@@ -212,17 +206,10 @@ public class DistinctOperation<T> implements AsyncReadOperation<AsyncBatchCursor
         };
     }
 
-<<<<<<< HEAD
-    private Function<BsonDocument, AsyncBatchCursor<T>> asyncTransformer(final ConnectionDescription connectionDescription) {
-        return new Function<BsonDocument, AsyncBatchCursor<T>>() {
-            @Override
-            public AsyncBatchCursor<T> apply(final BsonDocument result) {
-=======
     private CommandTransformer<BsonDocument, AsyncBatchCursor<T>> asyncTransformer(final ConnectionDescription connectionDescription) {
         return new CommandTransformer<BsonDocument, AsyncBatchCursor<T>>() {
             @Override
             public AsyncBatchCursor<T> apply(final BsonDocument result, final ServerAddress serverAddress) {
->>>>>>> mongodb/master
                 QueryResult<T> queryResult = createQueryResult(result, connectionDescription);
                 return new AsyncQueryBatchCursor<T>(queryResult, 0, 0, null);
             }

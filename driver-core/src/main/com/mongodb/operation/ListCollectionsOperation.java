@@ -224,11 +224,7 @@ public class ListCollectionsOperation<T> implements AsyncReadOperation<AsyncBatc
                                         } else {
                                             wrappedCallback.onResult(new ProjectingAsyncBatchCursor(
                                                     new AsyncQueryBatchCursor<BsonDocument>(result, 0,
-<<<<<<< HEAD
-                                                            batchSize, new BsonDocumentCodec(), source, connection)
-=======
                                                             batchSize, 0, new BsonDocumentCodec(), source, connection)
->>>>>>> mongodb/master
                                             ), null);
                                         }
                                     }
@@ -247,19 +243,11 @@ public class ListCollectionsOperation<T> implements AsyncReadOperation<AsyncBatc
         return new MongoNamespace(databaseName, "$cmd.listCollections");
     }
 
-<<<<<<< HEAD
-    private Function<BsonDocument, AsyncBatchCursor<T>> asyncTransformer(final AsyncConnectionSource source,
-                                                                         final AsyncConnection connection) {
-        return new Function<BsonDocument, AsyncBatchCursor<T>>() {
-            @Override
-            public AsyncBatchCursor<T> apply(final BsonDocument result) {
-=======
     private CommandTransformer<BsonDocument, AsyncBatchCursor<T>> asyncTransformer(final AsyncConnectionSource source,
                                                                          final AsyncConnection connection) {
         return new CommandTransformer<BsonDocument, AsyncBatchCursor<T>>() {
             @Override
             public AsyncBatchCursor<T> apply(final BsonDocument result, final ServerAddress serverAddress) {
->>>>>>> mongodb/master
                 return cursorDocumentToAsyncBatchCursor(result.getDocument("cursor"), decoder, source, connection, batchSize);
             }
         };

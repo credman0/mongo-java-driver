@@ -556,21 +556,6 @@ public ConnectionString(final String connectionString) {
 
     @SuppressWarnings("deprecation")
     private WriteConcern buildWriteConcern(final Boolean safe, final String w,
-<<<<<<< HEAD
-                                           final int wTimeout, final boolean fsync, final boolean journal) {
-        if (w != null || wTimeout != 0 || fsync || journal) {
-            WriteConcern writeConcernWithWValue;
-            if (w == null) {
-                writeConcernWithWValue = WriteConcern.ACKNOWLEDGED;
-            } else {
-                try {
-                    writeConcernWithWValue = new WriteConcern(Integer.parseInt(w));
-                } catch (NumberFormatException e) {
-                    writeConcernWithWValue = new WriteConcern(w);
-                }
-            }
-            return writeConcernWithWValue.withWTimeout(wTimeout).withJ(journal).withFsync(fsync);
-=======
                                            final Integer wTimeout, final Boolean fsync, final Boolean journal) {
         WriteConcern retVal = null;
         if (w != null || wTimeout != null || fsync != null || journal != null) {
@@ -593,7 +578,6 @@ public ConnectionString(final String connectionString) {
                 retVal = retVal.withFsync(fsync);
             }
             return retVal;
->>>>>>> mongodb/master
         } else if (safe != null) {
             if (safe) {
                 retVal = WriteConcern.ACKNOWLEDGED;

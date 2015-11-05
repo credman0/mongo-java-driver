@@ -23,13 +23,10 @@ import org.bson.BsonString
 import spock.lang.Specification
 import spock.lang.Unroll
 
-<<<<<<< HEAD
-=======
 import static java.util.concurrent.TimeUnit.MICROSECONDS
 import static java.util.concurrent.TimeUnit.MILLISECONDS
 import static java.util.concurrent.TimeUnit.SECONDS
 
->>>>>>> mongodb/master
 @SuppressWarnings('deprecation')
 class WriteConcernSpecification extends Specification {
 
@@ -37,26 +34,11 @@ class WriteConcernSpecification extends Specification {
     def 'constructors should set up write concern #wc correctly'() {
         expect:
         wc.getWObject() == w;
-<<<<<<< HEAD
-        wc.getWtimeout() == wTimeout;
-=======
         wc.getWTimeout(MILLISECONDS) == wTimeout;
->>>>>>> mongodb/master
         wc.getFsync() == fsync;
         wc.getJournal() == journal;
 
         where:
-<<<<<<< HEAD
-        wc                                                | w    | wTimeout | fsync | j
-        new WriteConcern()                                | 0    | 0        | false | false
-        new WriteConcern(1)                               | 1    | 0        | false | false
-        new WriteConcern(1, 10)                           | 1    | 10       | false | false
-        new WriteConcern(true)                            | 1    | 0        | true  | false
-        new WriteConcern(1, 10, true)                     | 1    | 10       | true  | false
-        new WriteConcern(1, 10, false, true)              | 1    | 10       | false | true
-        new WriteConcern(1, 10, false, true)              | 1    | 10       | false | true
-        new WriteConcern((Object) null, 0, false, false)  | null | 0        | false | false
-=======
         wc                                                | w          | wTimeout | fsync | journal
         new WriteConcern()                                | 0          | null     | false | null
         new WriteConcern(1)                               | 1          | null     | false | null
@@ -69,7 +51,6 @@ class WriteConcernSpecification extends Specification {
         new WriteConcern('majority')                      | 'majority' | null     | false | null
         new WriteConcern('dc1', 10, false, true)          | 'dc1'      | 10       | false | true
         new WriteConcern('dc1', 10, false, true)          | 'dc1'      | 10       | false | true
->>>>>>> mongodb/master
     }
 
     def 'test journal getters'() {
@@ -129,19 +110,6 @@ class WriteConcernSpecification extends Specification {
 
     def 'test getWString'() {
         expect:
-<<<<<<< HEAD
-        WriteConcern.W1 == WriteConcern.UNACKNOWLEDGED.withW(1);
-        WriteConcern.FSYNCED == WriteConcern.ACKNOWLEDGED.withFsync(true);
-        WriteConcern.JOURNALED == WriteConcern.ACKNOWLEDGED.withJ(true);
-        new WriteConcern(1, 1000) == WriteConcern.ACKNOWLEDGED.withWTimeout(1000)
-        new WriteConcern('dc1') == WriteConcern.UNACKNOWLEDGED.withW('dc1');
-        new WriteConcern('dc1', 0, true, false) == new WriteConcern('dc1').withFsync(true);
-        new WriteConcern('dc1', 0, false, true) == new WriteConcern('dc1').withJ(true);
-        new WriteConcern('dc1', 1000, false, false) == new WriteConcern('dc1').withWTimeout(1000);
-        new WriteConcern(2, 0, true, false) == new WriteConcern(2).withFsync(true);
-        new WriteConcern(2, 0, false, true) == new WriteConcern(2).withJ(true);
-        new WriteConcern(2, 1000, false, false) == new WriteConcern(2).withWTimeout(1000);
-=======
         wc.getWString() == wString
 
         where:
@@ -244,7 +212,6 @@ class WriteConcernSpecification extends Specification {
 
         then:
         thrown(IllegalArgumentException)
->>>>>>> mongodb/master
     }
 
     @Unroll
@@ -258,13 +225,8 @@ class WriteConcernSpecification extends Specification {
         WriteConcern.UNACKNOWLEDGED       | new BsonDocument('w', new BsonInt32(0))
         WriteConcern.ACKNOWLEDGED         | new BsonDocument()
         WriteConcern.W2 | new BsonDocument('w', new BsonInt32(2))
-<<<<<<< HEAD
-        WriteConcern.JOURNALED            | new BsonDocument('w', new BsonInt32(1)).append('j', BsonBoolean.TRUE)
-        WriteConcern.FSYNCED              | new BsonDocument('w', new BsonInt32(1)).append('fsync', BsonBoolean.TRUE)
-=======
         WriteConcern.JOURNALED            | new BsonDocument('j', BsonBoolean.TRUE)
         WriteConcern.FSYNCED              | new BsonDocument('fsync', BsonBoolean.TRUE)
->>>>>>> mongodb/master
         new WriteConcern('majority')      | new BsonDocument('w', new BsonString('majority'))
         new WriteConcern(2, 100)          | new BsonDocument('w', new BsonInt32(2)).append('wtimeout', new BsonInt32(100))
     }
@@ -294,13 +256,8 @@ class WriteConcernSpecification extends Specification {
         WriteConcern.W1                      | 29791
         WriteConcern.W2                      | 59582
         WriteConcern.MAJORITY                | -1401337973
-<<<<<<< HEAD
-        new WriteConcern(1, 0, false, false) | 29791
-        new WriteConcern(1, 0, true, true)   | 29823
-=======
         new WriteConcern(1, 0, false, false) | 69375
         new WriteConcern(1, 0, true, true)   | 69183
->>>>>>> mongodb/master
     }
 
     def 'test constants'() {
@@ -308,20 +265,6 @@ class WriteConcernSpecification extends Specification {
         constructedWriteConcern == constantWriteConcern
 
         where:
-<<<<<<< HEAD
-        constructedWriteConcern                          | constantWriteConcern
-        new WriteConcern((Object) null, 0, false, false) | WriteConcern.ACKNOWLEDGED
-        new WriteConcern(1)                              | WriteConcern.W1
-        new WriteConcern(2)                              | WriteConcern.W2
-        new WriteConcern(3)                              | WriteConcern.W3
-        new WriteConcern(0)                              | WriteConcern.UNACKNOWLEDGED
-        new WriteConcern(1, 0, true)                     | WriteConcern.FSYNCED
-        new WriteConcern(1, 0, true)                     | WriteConcern.FSYNC_SAFE
-        new WriteConcern(1, 0, false, true)              | WriteConcern.JOURNALED
-        new WriteConcern(2)                              | WriteConcern.REPLICA_ACKNOWLEDGED
-        new WriteConcern(2)                              | WriteConcern.REPLICAS_SAFE
-        new WriteConcern('majority')                     | WriteConcern.MAJORITY
-=======
         constructedWriteConcern                           | constantWriteConcern
         new WriteConcern((Object) null, null, null, null) | WriteConcern.ACKNOWLEDGED
         new WriteConcern(1)                               | WriteConcern.W1
@@ -334,7 +277,6 @@ class WriteConcernSpecification extends Specification {
         new WriteConcern(2)                               | WriteConcern.REPLICA_ACKNOWLEDGED
         new WriteConcern(2)                               | WriteConcern.REPLICAS_SAFE
         new WriteConcern('majority')                      | WriteConcern.MAJORITY
->>>>>>> mongodb/master
     }
 
     def 'test isAcknowledged'() {
@@ -343,15 +285,6 @@ class WriteConcernSpecification extends Specification {
         writeConcern.callGetLastError() == acknowledged
 
         where:
-<<<<<<< HEAD
-        writeConcern                        | acknowledged
-        WriteConcern.ACKNOWLEDGED           | true
-        WriteConcern.W1                     | true
-        WriteConcern.W2                     | true
-        WriteConcern.W3                     | true
-        WriteConcern.MAJORITY               | true
-        WriteConcern.UNACKNOWLEDGED         | false
-=======
         writeConcern                                               | acknowledged
         WriteConcern.ACKNOWLEDGED                                  | true
         WriteConcern.W1                                            | true
@@ -364,7 +297,6 @@ class WriteConcernSpecification extends Specification {
         WriteConcern.UNACKNOWLEDGED.withJournal(true)              | true
         WriteConcern.UNACKNOWLEDGED.withFsync(false)               | false
         WriteConcern.UNACKNOWLEDGED.withJournal(false)             | false
->>>>>>> mongodb/master
     }
 
     def 'test value of'() {

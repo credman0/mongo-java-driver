@@ -361,16 +361,10 @@ class MongoClientOptionsSpecification extends Specification {
         def expected = ['alwaysUseMBeans', 'codecRegistry', 'commandListeners', 'connectTimeout', 'cursorFinalizerEnabled',
                         'dbDecoderFactory', 'dbEncoderFactory', 'description', 'heartbeatConnectTimeout', 'heartbeatFrequency',
                         'heartbeatSocketTimeout', 'localThreshold', 'maxConnectionIdleTime', 'maxConnectionLifeTime',
-<<<<<<< HEAD
-                        'maxConnectionsPerHost', 'maxWaitTime', 'minConnectionsPerHost', 'minHeartbeatFrequency', 'readPreference',
-                        'requiredReplicaSetName', 'serverSelectionTimeout', 'socketFactory', 'socketKeepAlive', 'socketTimeout',
-                        'sslEnabled', 'sslInvalidHostNameAllowed', 'threadsAllowedToBlockForConnectionMultiplier', 'writeConcern']
-=======
                         'maxConnectionsPerHost', 'maxWaitTime', 'minConnectionsPerHost', 'minHeartbeatFrequency', 'readConcern',
                         'readPreference', 'requiredReplicaSetName', 'serverSelectionTimeout', 'socketFactory', 'socketKeepAlive',
                         'socketTimeout', 'sslEnabled', 'sslInvalidHostNameAllowed', 'threadsAllowedToBlockForConnectionMultiplier',
                         'writeConcern']
->>>>>>> mongodb/master
 
         then:
         actual == expected

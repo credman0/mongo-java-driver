@@ -27,11 +27,6 @@ import java.util.concurrent.TimeUnit;
  * @since 3.0
  */
 public class IndexOptions {
-<<<<<<< HEAD
-    private static final List<Integer> VALID_TEXT_INDEX_VERSIONS = asList(1, 2, 3);
-    private static final List<Integer> VALID_SPHERE_INDEX_VERSIONS = asList(1, 2);
-=======
->>>>>>> mongodb/master
     private boolean background;
     private boolean unique;
     private String name;
@@ -277,12 +272,6 @@ public class IndexOptions {
      * @return this
      */
     public IndexOptions textVersion(final Integer textVersion) {
-<<<<<<< HEAD
-        if (textVersion != null) {
-            isTrueArgument("textVersion must be 1, 2 or 3", VALID_TEXT_INDEX_VERSIONS.contains(textVersion));
-        }
-=======
->>>>>>> mongodb/master
         this.textVersion = textVersion;
         return this;
     }

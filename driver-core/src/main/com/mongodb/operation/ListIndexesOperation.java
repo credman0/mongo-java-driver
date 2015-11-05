@@ -191,11 +191,7 @@ public class ListIndexesOperation<T> implements AsyncReadOperation<AsyncBatchCur
                                         if (t != null) {
                                             wrappedCallback.onResult(null, t);
                                         } else {
-<<<<<<< HEAD
-                                            wrappedCallback.onResult(new AsyncQueryBatchCursor<T>(result, 0, batchSize, decoder, source,
-=======
                                             wrappedCallback.onResult(new AsyncQueryBatchCursor<T>(result, 0, batchSize, 0, decoder, source,
->>>>>>> mongodb/master
                                                                                                   connection),
                                                     null);
                                         }
@@ -244,19 +240,11 @@ public class ListIndexesOperation<T> implements AsyncReadOperation<AsyncBatchCur
         };
     }
 
-<<<<<<< HEAD
-    private Function<BsonDocument, AsyncBatchCursor<T>> asyncTransformer(final AsyncConnectionSource source,
-                                                                         final AsyncConnection connection) {
-        return new Function<BsonDocument, AsyncBatchCursor<T>>() {
-            @Override
-            public AsyncBatchCursor<T> apply(final BsonDocument result) {
-=======
     private CommandTransformer<BsonDocument, AsyncBatchCursor<T>> asyncTransformer(final AsyncConnectionSource source,
                                                                          final AsyncConnection connection) {
         return new CommandTransformer<BsonDocument, AsyncBatchCursor<T>>() {
             @Override
             public AsyncBatchCursor<T> apply(final BsonDocument result, final ServerAddress serverAddress) {
->>>>>>> mongodb/master
                 return cursorDocumentToAsyncBatchCursor(result.getDocument("cursor"), decoder, source, connection, batchSize);
             }
         };

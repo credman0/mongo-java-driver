@@ -87,55 +87,6 @@ class IndexOptionsSpecification extends Specification {
         options2.getBucketSize() == 200.0
         options2.getStorageEngine() == storageEngine
         options2.getPartialFilterExpression() == partialFilterExpression
-<<<<<<< HEAD
-    }
-
-    def 'should validate textIndexVersion'() {
-        when:
-        new IndexOptions().textVersion(1)
-
-        then:
-        notThrown(IllegalArgumentException)
-
-        when:
-        new IndexOptions().textVersion(2)
-
-        then:
-        notThrown(IllegalArgumentException)
-
-        when:
-        new IndexOptions().textVersion(3)
-
-        then:
-        notThrown(IllegalArgumentException)
-
-        when:
-        new IndexOptions().textVersion(4)
-
-        then:
-        thrown(IllegalArgumentException)
-    }
-
-    def 'should validate 2dsphereIndexVersion'() {
-        when:
-        new IndexOptions().sphereVersion(1)
-
-        then:
-        notThrown(IllegalArgumentException)
-
-        when:
-        new IndexOptions().sphereVersion(2)
-
-        then:
-        notThrown(IllegalArgumentException)
-
-        when:
-        new IndexOptions().sphereVersion(3)
-
-        then:
-        thrown(IllegalArgumentException)
-=======
->>>>>>> mongodb/master
     }
 
     def 'should convert expireAfter'() {

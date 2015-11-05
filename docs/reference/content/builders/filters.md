@@ -177,8 +177,6 @@ Available with MongoDB 3.2, a version 3 text index allows diacritic-sensitive se
 
 ```java
 text("café", new TextSearchOptions().diacriticSensitive(true))
-<<<<<<< HEAD
-=======
 ```
 
 ### Bitwise
@@ -197,7 +195,6 @@ The example selects documents that have a `bitField` field with bits set at posi
 
 ```java
 bitsAllSet("bitField", 50)
->>>>>>> mongodb/master
 ```
 
 ### Geospatial

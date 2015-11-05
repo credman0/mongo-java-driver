@@ -114,14 +114,11 @@ public final class ClusterFixture {
                 .execute(getBinding());
     }
 
-<<<<<<< HEAD
-=======
     public static Document getServerStatus() {
         return new CommandWriteOperation<Document>("admin", new BsonDocument("serverStatus", new BsonInt32(1)), new DocumentCodec())
                .execute(getBinding());
     }
 
->>>>>>> mongodb/master
     @SuppressWarnings("unchecked")
     public static boolean isEnterpriseServer() {
         Document buildInfo = getBuildInfo();
@@ -133,8 +130,6 @@ public final class ClusterFixture {
         return modules.contains("enterprise");
     }
 
-<<<<<<< HEAD
-=======
     public static boolean supportsFsync() {
         Document serverStatus = getServerStatus();
         Document storageEngine = (Document) serverStatus.get("storageEngine");
@@ -142,7 +137,6 @@ public final class ClusterFixture {
         return storageEngine != null && !storageEngine.get("name").equals("inMemory");
     }
 
->>>>>>> mongodb/master
     private static ServerVersion getConnectedServerVersion() {
         ClusterDescription clusterDescription = getCluster().getDescription();
         int retries = 0;

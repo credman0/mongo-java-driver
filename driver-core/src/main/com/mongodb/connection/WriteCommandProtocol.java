@@ -44,10 +44,7 @@ abstract class WriteCommandProtocol implements Protocol<BulkWriteResult> {
     private final MongoNamespace namespace;
     private final boolean ordered;
     private final WriteConcern writeConcern;
-<<<<<<< HEAD
-=======
     private final Boolean bypassDocumentValidation;
->>>>>>> mongodb/master
     private CommandListener commandListener;
 
     /**
@@ -64,11 +61,6 @@ abstract class WriteCommandProtocol implements Protocol<BulkWriteResult> {
         this.ordered = ordered;
         this.writeConcern = writeConcern;
         this.bypassDocumentValidation = bypassDocumentValidation;
-    }
-
-    @Override
-    public void setCommandListener(final CommandListener commandListener) {
-        this.commandListener = commandListener;
     }
 
     @Override

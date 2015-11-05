@@ -190,11 +190,7 @@ public interface AsyncConnection extends ReferenceCounted {
      * @param oplogReplay     whether to replay the oplog
      * @param resultDecoder   the decoder for the query result documents
      * @param <T>             the query result document type
-<<<<<<< HEAD
-     * @param callback     the callback to be passed the write result
-=======
      * @param callback        the callback to be passed the write result
->>>>>>> mongodb/master
      * @deprecated Replaced by {@link #queryAsync(MongoNamespace, BsonDocument, BsonDocument, int, int, int, boolean, boolean, boolean,
      * boolean, boolean, boolean, Decoder, SingleResultCallback)}
      */
@@ -220,22 +216,14 @@ public interface AsyncConnection extends ReferenceCounted {
      * @param oplogReplay     whether to replay the oplog
      * @param resultDecoder   the decoder for the query result documents
      * @param <T>             the query result document type
-<<<<<<< HEAD
-     * @param callback     the callback to be passed the write result
-     *
-=======
      * @param callback        the callback to be passed the write result
->>>>>>> mongodb/master
      * @since 3.1
      */
     <T> void queryAsync(MongoNamespace namespace, BsonDocument queryDocument, BsonDocument fields,
                         int skip, int limit, int batchSize, boolean slaveOk, boolean tailableCursor, boolean awaitData,
                         boolean noCursorTimeout, boolean partial, boolean oplogReplay, Decoder<T> resultDecoder,
                         SingleResultCallback<QueryResult<T>> callback);
-<<<<<<< HEAD
-=======
 
->>>>>>> mongodb/master
     /**
      * Get more result documents from a cursor asynchronously.
      *
@@ -265,20 +253,6 @@ public interface AsyncConnection extends ReferenceCounted {
      * @param namespace the namespace in which the cursors live
      * @param cursors   the cursors
      * @param callback  the callback that is called once the cursors have been killed
-     * @deprecated Replaced by {@link #killCursorAsync(MongoNamespace, List, SingleResultCallback)}
      */
-<<<<<<< HEAD
-    @Deprecated
-    void killCursorAsync(List<Long> cursors, SingleResultCallback<Void> callback);
-
-    /**
-     * Asynchronously Kills the given list of cursors.
-     *
-     * @param namespace the namespace in which the cursors live
-     * @param cursors   the cursors
-     * @param callback  the callback that is called once the cursors have been killed
-     */
-=======
->>>>>>> mongodb/master
     void killCursorAsync(MongoNamespace namespace, List<Long> cursors, SingleResultCallback<Void> callback);
 }

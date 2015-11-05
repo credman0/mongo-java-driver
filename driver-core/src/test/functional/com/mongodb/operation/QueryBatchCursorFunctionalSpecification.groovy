@@ -147,11 +147,7 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
 
     def 'test limit exhaustion'() {
         given:
-<<<<<<< HEAD:driver-core/src/test/functional/com/mongodb/operation/QueryBatchCursorSpecification.groovy
-        def firstBatch = executeQuery(5, 2)
-=======
         def firstBatch = executeQuery(limit, batchSize)
->>>>>>> mongodb/master:driver-core/src/test/functional/com/mongodb/operation/QueryBatchCursorFunctionalSpecification.groovy
         def connection = connectionSource.getConnection()
 
         when:
@@ -318,11 +314,7 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
         def firstBatch = executeQuery(5)
         def connection = connectionSource.getConnection()
 
-<<<<<<< HEAD:driver-core/src/test/functional/com/mongodb/operation/QueryBatchCursorSpecification.groovy
-        cursor = new QueryBatchCursor<Document>(firstBatch, 5, 0, new DocumentCodec(), connectionSource, connection)
-=======
         cursor = new QueryBatchCursor<Document>(firstBatch, 5, 0, 0, new DocumentCodec(), connectionSource, connection)
->>>>>>> mongodb/master:driver-core/src/test/functional/com/mongodb/operation/QueryBatchCursorFunctionalSpecification.groovy
 
         when:
         makeAdditionalGetMoreCall(firstBatch.cursor, connection)
@@ -480,12 +472,9 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
         }
     }
 
-<<<<<<< HEAD:driver-core/src/test/functional/com/mongodb/operation/QueryBatchCursorSpecification.groovy
-=======
     // More of an integration test to ensure proper server behavior, as there is no specific driver code in the cursor implementation to
     // enable reading from a secondary.  But since the cursor, as per spec, does not set the slaveOk flag for the getMore command, this
     // test ensures that the server does not require it.
->>>>>>> mongodb/master:driver-core/src/test/functional/com/mongodb/operation/QueryBatchCursorFunctionalSpecification.groovy
     @IgnoreIf({ !isDiscoverableReplicaSet() })
     def 'should get more from a secondary'() {
         given:
@@ -535,14 +524,6 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
             if (serverIsAtLeastVersionThreeDotTwo(connection.getDescription())) {
                 def findCommand = new BsonDocument('find', new BsonString(getCollectionName()))
                         .append('filter', filter)
-<<<<<<< HEAD:driver-core/src/test/functional/com/mongodb/operation/QueryBatchCursorSpecification.groovy
-                        .append('batchSize', new BsonInt32(batchSize))
-                        .append('tailable', BsonBoolean.valueOf(tailable))
-                        .append('awaitData', BsonBoolean.valueOf(awaitData))
-                if (limit > 0) {
-                    findCommand.append('limit', new BsonInt32(limit))
-                }
-=======
                         .append('tailable', BsonBoolean.valueOf(tailable))
                         .append('awaitData', BsonBoolean.valueOf(awaitData))
 
@@ -556,7 +537,6 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
                     }
                 }
 
->>>>>>> mongodb/master:driver-core/src/test/functional/com/mongodb/operation/QueryBatchCursorFunctionalSpecification.groovy
                 def response = connection.command(getDatabaseName(), findCommand,
                                                   slaveOk, new NoOpFieldNameValidator(),
                                                   CommandResultDocumentCodec.create(new DocumentCodec(), 'firstBatch'))

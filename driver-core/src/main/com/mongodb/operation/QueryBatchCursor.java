@@ -208,11 +208,7 @@ class QueryBatchCursor<T> implements BatchCursor<T> {
                 try {
                     initFromCommandResult(connection.command(namespace.getDatabaseName(),
                                                              asGetMoreCommandDocument(),
-<<<<<<< HEAD
-                                                             true,
-=======
                                                              false,
->>>>>>> mongodb/master
                                                              new NoOpFieldNameValidator(),
                                                              CommandResultDocumentCodec.create(decoder, "nextBatch")));
                 } catch (MongoCommandException e) {
@@ -235,17 +231,12 @@ class QueryBatchCursor<T> implements BatchCursor<T> {
         BsonDocument document = new BsonDocument("getMore", new BsonInt64(serverCursor.getId()))
                                 .append("collection", new BsonString(namespace.getCollectionName()));
 
-<<<<<<< HEAD
-        if (batchSize != 0) {
-            document.append("batchSize", new BsonInt32(Math.abs(batchSize)));
-=======
         int batchSizeForGetMoreCommand = Math.abs(getNumberToReturn(limit, this.batchSize, count));
         if (batchSizeForGetMoreCommand != 0) {
             document.append("batchSize", new BsonInt32(batchSizeForGetMoreCommand));
         }
         if (maxTimeMS != 0) {
             document.append("maxTimeMS", new BsonInt64(maxTimeMS));
->>>>>>> mongodb/master
         }
 
         return document;
@@ -280,10 +271,7 @@ class QueryBatchCursor<T> implements BatchCursor<T> {
 
     private void killCursor(final Connection connection) {
         if (serverCursor != null) {
-<<<<<<< HEAD
-=======
             notNull("connection", connection);
->>>>>>> mongodb/master
             connection.killCursor(namespace, singletonList(serverCursor.getId()));
             serverCursor = null;
         }

@@ -126,11 +126,7 @@ final class OperationHelper {
                                                                     final int batchSize) {
         return new AsyncQueryBatchCursor<T>(OperationHelper.<T>cursorDocumentToQueryResult(cursorDocument,
                                                                                            source.getServerDescription().getAddress()),
-<<<<<<< HEAD
-                                            0, batchSize, decoder, source, connection);
-=======
                                             0, batchSize, 0, decoder, source, connection);
->>>>>>> mongodb/master
     }
 
 
@@ -157,7 +153,6 @@ final class OperationHelper {
     static <T> SingleResultCallback<T> releasingCallback(final SingleResultCallback<T> wrapped, final AsyncConnectionSource source,
                                                          final AsyncConnection connection) {
         return new ReferenceCountedReleasingWrappedCallback<T>(wrapped, asList(connection, source));
-<<<<<<< HEAD
     }
 
     static <T> SingleResultCallback<T> releasingCallback(final SingleResultCallback<T> wrapped,
@@ -167,17 +162,6 @@ final class OperationHelper {
         return new ReferenceCountedReleasingWrappedCallback<T>(wrapped, asList(readBinding, connection, source));
     }
 
-=======
-    }
-
-    static <T> SingleResultCallback<T> releasingCallback(final SingleResultCallback<T> wrapped,
-                                                         final AsyncReadBinding readBinding,
-                                                         final AsyncConnectionSource source,
-                                                         final AsyncConnection connection) {
-        return new ReferenceCountedReleasingWrappedCallback<T>(wrapped, asList(readBinding, connection, source));
-    }
-
->>>>>>> mongodb/master
     private static class ReferenceCountedReleasingWrappedCallback<T> implements SingleResultCallback<T> {
         private final SingleResultCallback<T> wrapped;
         private final List<? extends ReferenceCounted> referenceCounted;
@@ -206,11 +190,7 @@ final class OperationHelper {
     }
 
     static boolean serverIsAtLeastVersionThreeDotTwo(final ConnectionDescription description) {
-<<<<<<< HEAD
-        return serverIsAtLeastVersion(description, new ServerVersion(asList(3, 1, 7)));
-=======
         return serverIsAtLeastVersion(description, new ServerVersion(asList(3, 1, 9)));
->>>>>>> mongodb/master
     }
 
     static boolean serverIsAtLeastVersion(final ConnectionDescription description, final ServerVersion serverVersion) {

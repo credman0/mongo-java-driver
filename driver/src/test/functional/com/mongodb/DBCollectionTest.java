@@ -835,11 +835,7 @@ public class DBCollectionTest extends DatabaseTestCase {
     public void testWriteConcernExceptionOnInsert() throws UnknownHostException {
         assumeThat(isDiscoverableReplicaSet(), is(true));
         try {
-<<<<<<< HEAD
-            WriteResult res = collection.insert(new BasicDBObject(), new WriteConcern(5).withWTimeout(1));
-=======
             WriteResult res = collection.insert(new BasicDBObject(), new WriteConcern(5).withWTimeout(1, MILLISECONDS));
->>>>>>> mongodb/master
             fail("Write should have failed but succeeded with result " + res);
         } catch (WriteConcernException e) {
             assertEquals(0, e.getWriteConcernResult().getCount());
@@ -853,11 +849,7 @@ public class DBCollectionTest extends DatabaseTestCase {
         collection.insert(new BasicDBObject("_id", id));
         try {
             WriteResult res = collection.update(new BasicDBObject("_id", id), new BasicDBObject("$set", new BasicDBObject("x", 1)),
-<<<<<<< HEAD
-                                                false, false, new WriteConcern(5).withWTimeout(1));
-=======
                                                 false, false, new WriteConcern(5).withWTimeout(1, MILLISECONDS));
->>>>>>> mongodb/master
             fail("Write should have failed but succeeded with result " + res);
         } catch (WriteConcernException e) {
             assertEquals(1, e.getWriteConcernResult().getCount());
@@ -929,11 +921,7 @@ public class DBCollectionTest extends DatabaseTestCase {
         ObjectId id = new ObjectId();
         try {
             WriteResult res = collection.update(new BasicDBObject("_id", id), new BasicDBObject("$set", new BasicDBObject("x", 1)),
-<<<<<<< HEAD
-                                                true, false, new WriteConcern(5).withWTimeout(1));
-=======
                                                 true, false, new WriteConcern(5).withWTimeout(1, MILLISECONDS));
->>>>>>> mongodb/master
             fail("Write should have failed but succeeded with result " + res);
         } catch (WriteConcernException e) {
             assertEquals(1, e.getWriteConcernResult().getCount());
@@ -947,11 +935,7 @@ public class DBCollectionTest extends DatabaseTestCase {
         assumeThat(isDiscoverableReplicaSet(), is(true));
         try {
             collection.insert(new BasicDBObject());
-<<<<<<< HEAD
-            WriteResult res = collection.remove(new BasicDBObject(), new WriteConcern(5).withWTimeout(1));
-=======
             WriteResult res = collection.remove(new BasicDBObject(), new WriteConcern(5).withWTimeout(1, MILLISECONDS));
->>>>>>> mongodb/master
             fail("Write should have failed but succeeded with result " + res);
         } catch (WriteConcernException e) {
             assertEquals(1, e.getWriteConcernResult().getCount());
@@ -964,11 +948,7 @@ public class DBCollectionTest extends DatabaseTestCase {
         try {
             BulkWriteOperation bulkWriteOperation = collection.initializeUnorderedBulkOperation();
             bulkWriteOperation.insert(new BasicDBObject());
-<<<<<<< HEAD
-            BulkWriteResult res = bulkWriteOperation.execute(new WriteConcern(5).withWTimeout(1));
-=======
             BulkWriteResult res = bulkWriteOperation.execute(new WriteConcern(5).withWTimeout(1, MILLISECONDS));
->>>>>>> mongodb/master
             fail("Write should have failed but succeeded with result " + res);
         } catch (BulkWriteException e) {
             assertNotNull(e.getWriteConcernError());  // unclear what else we can reliably assert here

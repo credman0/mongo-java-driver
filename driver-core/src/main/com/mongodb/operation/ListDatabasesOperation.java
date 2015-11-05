@@ -136,13 +136,8 @@ public class ListDatabasesOperation<T> implements AsyncReadOperation<AsyncBatchC
                                                                          final AsyncConnection connection) {
         return new CommandTransformer<BsonDocument, AsyncBatchCursor<T>>() {
             @Override
-<<<<<<< HEAD
-            public AsyncBatchCursor<T> apply(final BsonDocument result) {
-                return new AsyncQueryBatchCursor<T>(createQueryResult(result, connection.getDescription()), 0, 0, decoder, source,
-=======
             public AsyncBatchCursor<T> apply(final BsonDocument result, final ServerAddress serverAddress) {
                 return new AsyncQueryBatchCursor<T>(createQueryResult(result, connection.getDescription()), 0, 0, 0, decoder, source,
->>>>>>> mongodb/master
                                                     connection);
             }
         };

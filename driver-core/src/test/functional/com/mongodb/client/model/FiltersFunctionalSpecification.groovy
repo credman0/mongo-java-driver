@@ -262,7 +262,6 @@ class FiltersFunctionalSpecification extends OperationFunctionalSpecification {
         find(text('GIANT')) == [textDocument]
         find(text('GIANT', 'english')) == [textDocument]
         find(text('GIANT', new TextSearchOptions().language('english'))) == [textDocument]
-<<<<<<< HEAD
     }
 
     @IgnoreIf({ !serverVersionAtLeast([3, 1, 8]) })
@@ -284,29 +283,6 @@ class FiltersFunctionalSpecification extends OperationFunctionalSpecification {
         find(text('idéias', new TextSearchOptions().language('english'))) == []
     }
 
-=======
-    }
-
-    @IgnoreIf({ !serverVersionAtLeast([3, 1, 8]) })
-    def 'should render $text with 3.2 options'() {
-        given:
-        collectionHelper.drop()
-        getCollectionHelper().createIndex(new Document('desc', 'text'), 'portuguese')
-
-        when:
-        def textDocument = new Document('_id', 1).append('desc', 'mongodb para idéias GIGANTES')
-        collectionHelper.insertDocuments(textDocument)
-
-        then:
-        find(text('idéias')) == [textDocument]
-        find(text('ideias', new TextSearchOptions())) == [textDocument]
-        find(text('ideias', new TextSearchOptions().caseSensitive(false).diacriticSensitive(false))) == [textDocument]
-        find(text('IDéIAS', new TextSearchOptions().caseSensitive(false).diacriticSensitive(true))) == [textDocument]
-        find(text('ideias', new TextSearchOptions().caseSensitive(true).diacriticSensitive(true))) == []
-        find(text('idéias', new TextSearchOptions().language('english'))) == []
-    }
-
->>>>>>> mongodb/master
 
     def 'should render $regex'() {
         expect:

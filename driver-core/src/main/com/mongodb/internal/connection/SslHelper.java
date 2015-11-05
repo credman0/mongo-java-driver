@@ -30,9 +30,6 @@ public final class SslHelper {
      */
     public static SSLParameters enableHostNameVerification(final SSLParameters sslParameters) {
         sslParameters.setEndpointIdentificationAlgorithm("HTTPS");
-        /*String[] s=new String[1];
-        s[0]="HTTPS";
-        sslParameters.setProtocols(s);*/
         return sslParameters;
     }
 
