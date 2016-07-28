@@ -38,3 +38,6 @@ codereview.rc
 docs/reference/public
 docs/landing/public
 docs/hugo*
+
+bson/bin
+driver-core/bin

@@ -41,7 +41,7 @@ class GenericWriteProtocol extends WriteProtocol {
         throw new UnsupportedOperationException("Not implemented yet!");
     }
 
-    @Override
+    //Override
     protected String getCommandName() {
         throw new UnsupportedOperationException("Not implemented yet!");
 

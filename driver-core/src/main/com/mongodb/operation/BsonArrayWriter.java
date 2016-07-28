@@ -41,6 +41,7 @@ import org.bson.BsonTimestamp;
 import org.bson.BsonUndefined;
 import org.bson.BsonValue;
 import org.bson.BsonWriterSettings;
+import org.bson.types.Decimal128;
 import org.bson.types.ObjectId;
 
 import static org.bson.BsonContextType.DOCUMENT;
@@ -238,4 +239,10 @@ class BsonArrayWriter extends AbstractBsonWriter {
             }
         }
     }
+
+	@Override
+	protected void doWriteDecimal128(Decimal128 value) {
+		// TODO Auto-generated method stub
+		
+	}
 }
