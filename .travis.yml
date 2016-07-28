@@ -31,8 +31,8 @@ script:
     - ./gradlew -q assemble
     #- ./gradlew check -i -S -Pquicktest=true
 after_success:
-    - cp /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/libs/mongo-java-driver-3.2.0-SNAPSHOT.jar ./gh-pages/JARs/
+    - cp /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/libs/mongo-java-driver-3.4.0-SNAPSHOT.jar ./gh-pages/JARs/
     - ./update-gh-pages.sh
 after_failure:
-    - cp /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/libs/mongo-java-driver-3.2.0-SNAPSHOT.jar ./gh-pages/JARs/
+    - cp /home/travis/build/matfur92/mongo-java-driver/mongo-java-driver/build/libs/mongo-java-driver-3.4.0-SNAPSHOT.jar ./gh-pages/JARs/
     - ./update-gh-pages.sh
