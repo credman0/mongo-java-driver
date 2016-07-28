@@ -25,15 +25,10 @@ import org.bson.BsonDocument;
 import org.bson.BsonInt32;
 import org.bson.BsonString;
 
-<<<<<<< HEAD
+import javax.security.auth.Subject;
 import gnusasl.javax.security.sasl.SaslClient;
 import gnusasl.javax.security.sasl.SaslException;
-=======
-import javax.security.auth.Subject;
-import javax.security.sasl.SaslClient;
-import javax.security.sasl.SaslException;
 import java.security.PrivilegedAction;
->>>>>>> mongodb/master
 
 import static com.mongodb.MongoCredential.JAVA_SUBJECT_KEY;
 import static com.mongodb.connection.CommandHelper.executeCommand;
