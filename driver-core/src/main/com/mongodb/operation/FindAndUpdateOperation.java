@@ -46,6 +46,7 @@ import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommand
 import static com.mongodb.operation.DocumentHelper.putIfNotNull;
 import static com.mongodb.operation.DocumentHelper.putIfNotZero;
 import static com.mongodb.operation.DocumentHelper.putIfTrue;
+import static com.mongodb.operation.OperationHelper.LOGGER;
 import static com.mongodb.operation.OperationHelper.releasingCallback;
 import static com.mongodb.operation.OperationHelper.serverIsAtLeastVersionThreeDotTwo;
 import static com.mongodb.operation.OperationHelper.withConnection;
@@ -56,6 +57,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
  *
  * @param <T> the operations result type.
  * @since 3.0
+ * @mongodb.driver.manual reference/command/findAndModify/ findAndModify
  */
 public class FindAndUpdateOperation<T> implements AsyncWriteOperation<T>, WriteOperation<T> {
     private final MongoNamespace namespace;
@@ -313,12 +315,13 @@ public class FindAndUpdateOperation<T> implements AsyncWriteOperation<T>, WriteO
         withConnection(binding, new AsyncCallableWithConnection() {
             @Override
             public void call(final AsyncConnection connection, final Throwable t) {
+                SingleResultCallback<T> errHandlingCallback = errorHandlingCallback(callback, LOGGER);
                 if (t != null) {
-                    errorHandlingCallback(callback).onResult(null, t);
+                    errHandlingCallback.onResult(null, t);
                 } else {
                     executeWrappedCommandProtocolAsync(binding, namespace.getDatabaseName(), asCommandDocument(connection.getDescription()),
                             getValidator(), CommandResultDocumentCodec.create(decoder, "value"), connection,
-                            FindAndModifyHelper.<T>transformer(), releasingCallback(errorHandlingCallback(callback), connection));
+                            FindAndModifyHelper.<T>transformer(), releasingCallback(errHandlingCallback, connection));
                 }
             }
         });

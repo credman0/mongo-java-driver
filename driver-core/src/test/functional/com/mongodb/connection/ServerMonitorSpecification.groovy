@@ -139,29 +139,31 @@ class ServerMonitorSpecification extends OperationFunctionalSpecification {
                                           .state(ServerConnectionState.CONNECTED)
                                           .address(new ServerAddress())
                                           .roundTripTime(5, TimeUnit.MILLISECONDS)
+                                          .lastUpdateTimeNanos(42L)
                                           .build(),
                          ServerDescription.builder()
                                           .type(ServerType.STANDALONE)
                                           .state(ServerConnectionState.CONNECTED)
                                           .address(new ServerAddress())
                                           .roundTripTime(5, TimeUnit.MILLISECONDS)
+                                          .lastUpdateTimeNanos(42L)
                                           .build());
     }
 
     def initializeServerMonitor(ServerAddress address) {
         serverMonitor = new DefaultServerMonitor(new ServerId(new ClusterId(), address), ServerSettings.builder().build(),
-                                          new ChangeListener<ServerDescription>() {
-                                              @Override
-                                              void stateChanged(final ChangeEvent<ServerDescription> event) {
-                                                  newDescription = event.newValue
-                                                  latch.countDown()
-                                              }
-                                          },
-                                          new InternalStreamConnectionFactory(new SocketStreamFactory(SocketSettings.builder().build(),
-                                                                                                      getSslSettings()),
-                                                                              getCredentialList(),
-                                                                              new NoOpConnectionListener()),
-                                          new TestConnectionPool())
+                new ChangeListener<ServerDescription>() {
+                    @Override
+                    void stateChanged(final ChangeEvent<ServerDescription> event) {
+                        newDescription = event.newValue
+                        latch.countDown()
+                    }
+                },
+                new InternalStreamConnectionFactory(new SocketStreamFactory(SocketSettings.builder().build(),
+                        getSslSettings()),
+                        getCredentialList(),
+                        new NoOpConnectionListener()),
+                new TestConnectionPool())
         serverMonitor.start()
         serverMonitor
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2015-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import com.mongodb.Function;
 import com.mongodb.MongoNamespace;
 import com.mongodb.ReadConcern;
 import com.mongodb.ReadPreference;
+import com.mongodb.WriteConcern;
 import com.mongodb.async.AsyncBatchCursor;
 import com.mongodb.async.SingleResultCallback;
 import com.mongodb.client.model.FindOptions;
@@ -51,6 +52,7 @@ class MapReduceIterableImpl<TDocument, TResult> implements MapReduceIterable<TRe
     private final AsyncOperationExecutor executor;
     private final String mapFunction;
     private final String reduceFunction;
+    private final WriteConcern writeConcern;
 
     private boolean inline = true;
     private String collectionName;
@@ -67,16 +69,19 @@ class MapReduceIterableImpl<TDocument, TResult> implements MapReduceIterable<TRe
     private boolean sharded;
     private boolean nonAtomic;
     private int batchSize;
+    private Boolean bypassDocumentValidation;
 
     MapReduceIterableImpl(final MongoNamespace namespace, final Class<TDocument> documentClass, final Class<TResult> resultClass,
                           final CodecRegistry codecRegistry, final ReadPreference readPreference, final ReadConcern readConcern,
-                          final AsyncOperationExecutor executor, final String mapFunction, final String reduceFunction) {
+                          final WriteConcern writeConcern, final AsyncOperationExecutor executor, final String mapFunction,
+                          final String reduceFunction) {
         this.namespace = notNull("namespace", namespace);
         this.documentClass = notNull("documentClass", documentClass);
         this.resultClass = notNull("resultClass", resultClass);
         this.codecRegistry = notNull("codecRegistry", codecRegistry);
         this.readPreference = notNull("readPreference", readPreference);
         this.readConcern = notNull("readConcern", readConcern);
+        this.writeConcern = notNull("writeConcern", writeConcern);
         this.executor = notNull("executor", executor);
         this.mapFunction = notNull("mapFunction", mapFunction);
         this.reduceFunction = notNull("reduceFunction", reduceFunction);
@@ -168,8 +173,16 @@ class MapReduceIterableImpl<TDocument, TResult> implements MapReduceIterable<TRe
         return this;
     }
 
+
+    @Override
+    public MapReduceIterable<TResult> bypassDocumentValidation(final Boolean bypassDocumentValidation) {
+        this.bypassDocumentValidation = bypassDocumentValidation;
+        return this;
+    }
+
     @Override
     public void toCollection(final SingleResultCallback<Void> callback) {
+        notNull("callback", callback);
         if (inline) {
             throw new IllegalArgumentException("The options must specify a non-inline result");
         }
@@ -184,16 +197,21 @@ class MapReduceIterableImpl<TDocument, TResult> implements MapReduceIterable<TRe
 
     @Override
     public void first(final SingleResultCallback<TResult> callback) {
+        notNull("callback", callback);
         execute().first(callback);
     }
 
     @Override
     public void forEach(final Block<? super TResult> block, final SingleResultCallback<Void> callback) {
+        notNull("block", block);
+        notNull("callback", callback);
         execute().forEach(block, callback);
     }
 
     @Override
     public <A extends Collection<? super TResult>> void into(final A target, final SingleResultCallback<A> callback) {
+        notNull("target", target);
+        notNull("callback", callback);
         execute().into(target, callback);
     }
 
@@ -204,6 +222,7 @@ class MapReduceIterableImpl<TDocument, TResult> implements MapReduceIterable<TRe
 
     @Override
     public void batchCursor(final SingleResultCallback<AsyncBatchCursor<TResult>> callback) {
+        notNull("callback", callback);
         execute().batchCursor(callback);
     }
 
@@ -239,7 +258,7 @@ class MapReduceIterableImpl<TDocument, TResult> implements MapReduceIterable<TRe
 
     private MapReduceToCollectionOperation createMapReduceToCollectionOperation() {
         MapReduceToCollectionOperation operation = new MapReduceToCollectionOperation(namespace, new BsonJavaScript(mapFunction),
-                new BsonJavaScript(reduceFunction), collectionName)
+                new BsonJavaScript(reduceFunction), collectionName, writeConcern)
                 .filter(toBsonDocument(filter))
                 .limit(limit)
                 .maxTime(maxTimeMS, MILLISECONDS)
@@ -250,7 +269,8 @@ class MapReduceIterableImpl<TDocument, TResult> implements MapReduceIterable<TRe
                 .action(action.getValue())
                 .nonAtomic(nonAtomic)
                 .sharded(sharded)
-                .databaseName(databaseName);
+                .databaseName(databaseName)
+                .bypassDocumentValidation(bypassDocumentValidation);
 
         if (finalizeFunction != null) {
             operation.finalizeFunction(new BsonJavaScript(finalizeFunction));

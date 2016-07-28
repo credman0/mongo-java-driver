@@ -65,14 +65,29 @@ import static java.util.Collections.singletonList;
  *
  * <p>The following options are supported (case insensitive):</p>
  *
+ * <p>Server Selection Configuration:</p>
+ * <ul>
+ * <li>{@code serverSelectionTimeoutMS=ms}: How long the driver will wait for server selection to succeed before throwing an exception.</li>
+ * <li>{@code localThresholdMS=ms}: When choosing among multiple MongoDB servers to send a request, the driver will only
+ * send that request to a server whose ping time is less than or equal to the server with the fastest ping time plus the local
+ * threshold.</li>
+ * </ul>
+ * <p>Server Monitoring Configuration:</p>
+ * <ul>
+ * <li>{@code heartbeatFrequencyMS=ms}: The frequency that the driver will attempt to determine the current state of each server in the
+ * cluster.</li>
+ * </ul>
  * <p>Replica set configuration:</p>
  * <ul>
  * <li>{@code replicaSet=name}: Implies that the hosts given are a seed list, and the driver will attempt to find
  * all members of the set.</li>
  * </ul>
  * <p>Connection Configuration:</p>
+ * <p>Connection Configuration:</p>
  * <ul>
+ * <li>{@code streamType=nio2|netty}: The stream type to use for connections. If unspecified, nio2 will be used.</li>
  * <li>{@code ssl=true|false}: Whether to connect using SSL.</li>
+ * <li>{@code sslInvalidHostNameAllowed=true|false}: Whether to allow invalid host names for SSL connections.</li>
  * <li>{@code connectTimeoutMS=ms}: How long a connection can take to be opened before timing out.</li>
  * <li>{@code socketTimeoutMS=ms}: How long a send or receive on a socket can take before timing out.</li>
  * <li>{@code maxIdleTimeMS=ms}: Maximum idle time of a pooled connection. A connection that exceeds this limit will be closed</li>
@@ -140,6 +155,10 @@ import static java.util.Collections.singletonList;
  * <li>Order matters when using multiple readPreferenceTags.</li>
  * </ul>
  * </li>
+ * <li>{@code maxStalenessMS=ms}. The maximum staleness in milliseconds. For use with any non-primary read preference, the driver estimates
+ * the staleness of each secondary, based on lastWriteDate values provided in server isMaster responses, and selects only those secondaries
+ * whose staleness is less than or equal to maxStalenessMS.  The default is 0, meaning there is no staleness check.
+ * </li>
  * </ul>
  * <p>Authentication configuration:</p>
  * <ul>
@@ -189,7 +208,12 @@ public class ConnectionString {
     private Integer connectTimeout;
     private Integer socketTimeout;
     private Boolean sslEnabled;
+    private Boolean sslInvalidHostnameAllowed;
+    private String streamType;
     private String requiredReplicaSetName;
+    private Integer serverSelectionTimeout;
+    private Integer localThreshold;
+    private Integer heartbeatFrequency;
 
     /**
      * Creates a ConnectionString from the given string.
@@ -197,7 +221,7 @@ public class ConnectionString {
      * @param connectionString     the connection string
      * @since 3.0
      */
-public ConnectionString(final String connectionString) {
+    public ConnectionString(final String connectionString) {
         this.connectionString = connectionString;
         if (!connectionString.startsWith(PREFIX)) {
             throw new IllegalArgumentException(format("The connection string is invalid. "
@@ -296,11 +320,18 @@ public ConnectionString(final String connectionString) {
         GENERAL_OPTIONS_KEYS.add("sockettimeoutms");
         GENERAL_OPTIONS_KEYS.add("sockettimeoutms");
         GENERAL_OPTIONS_KEYS.add("ssl");
+        GENERAL_OPTIONS_KEYS.add("streamtype");
+        GENERAL_OPTIONS_KEYS.add("sslinvalidhostnameallowed");
         GENERAL_OPTIONS_KEYS.add("replicaset");
         GENERAL_OPTIONS_KEYS.add("readconcernlevel");
 
+        GENERAL_OPTIONS_KEYS.add("serverselectiontimeoutms");
+        GENERAL_OPTIONS_KEYS.add("localthresholdms");
+        GENERAL_OPTIONS_KEYS.add("heartbeatfrequencyms");
+
         READ_PREFERENCE_KEYS.add("readpreference");
         READ_PREFERENCE_KEYS.add("readpreferencetags");
+        READ_PREFERENCE_KEYS.add("maxstalenessms");
 
         WRITE_CONCERN_KEYS.add("safe");
         WRITE_CONCERN_KEYS.add("w");
@@ -352,12 +383,22 @@ public ConnectionString(final String connectionString) {
                 connectTimeout = parseInteger(value, "connecttimeoutms");
             } else if (key.equals("sockettimeoutms")) {
                 socketTimeout = parseInteger(value, "sockettimeoutms");
+            } else if (key.equals("sslinvalidhostnameallowed") && parseBoolean(value, "sslinvalidhostnameallowed")) {
+                sslInvalidHostnameAllowed = true;
             } else if (key.equals("ssl") && parseBoolean(value, "ssl")) {
                 sslEnabled = true;
+            } else if (key.equals("streamtype")) {
+                streamType = value;
             } else if (key.equals("replicaset")) {
                 requiredReplicaSetName = value;
             } else if (key.equals("readconcernlevel")) {
                 readConcern = new ReadConcern(ReadConcernLevel.fromString(value));
+            } else if (key.equals("serverselectiontimeoutms")) {
+                serverSelectionTimeout = parseInteger(value, "serverselectiontimeoutms");
+            } else if (key.equals("localthresholdms")) {
+                localThreshold = parseInteger(value, "localthresholdms");
+            } else if (key.equals("heartbeatfrequencyms")) {
+                heartbeatFrequency = parseInteger(value, "heartbeatfrequencyms");
             }
         }
 
@@ -396,6 +437,7 @@ public ConnectionString(final String connectionString) {
     private ReadPreference createReadPreference(final Map<String, List<String>> optionsMap) {
         String readPreferenceType = null;
         List<TagSet> tagSetList = new ArrayList<TagSet>();
+        long maxStalenessMS = 0;
 
         for (final String key : READ_PREFERENCE_KEYS) {
             String value = getLastValue(optionsMap, key);
@@ -405,6 +447,8 @@ public ConnectionString(final String connectionString) {
 
             if (key.equals("readpreference")) {
                 readPreferenceType = value;
+            } else if (key.equals("maxstalenessms")) {
+                 maxStalenessMS = Integer.parseInt(value);
             } else if (key.equals("readpreferencetags")) {
                 for (final String cur : optionsMap.get(key)) {
                     TagSet tagSet = getTags(cur.trim());
@@ -412,7 +456,7 @@ public ConnectionString(final String connectionString) {
                 }
             }
         }
-        return buildReadPreference(readPreferenceType, tagSetList);
+        return buildReadPreference(readPreferenceType, tagSetList, maxStalenessMS);
     }
 
     private MongoCredential createCredentials(final Map<String, List<String>> optionsMap, final String userName,
@@ -527,7 +571,9 @@ public ConnectionString(final String connectionString) {
         }
         // handle legacy slaveok settings
         if (optionsMap.containsKey("slaveok") && !optionsMap.containsKey("readpreference")) {
-            optionsMap.put("readpreference", singletonList("secondaryPreferred"));
+            String readPreference = parseBoolean(getLastValue(optionsMap, "slaveok"), "slaveok")
+                                    ? "secondaryPreferred" : "primary";
+            optionsMap.put("readpreference", singletonList(readPreference));
             if (LOGGER.isWarnEnabled()) {
                 LOGGER.warn("Uri option 'slaveok' has been deprecated, use 'readpreference' instead.");
             }
@@ -544,12 +590,15 @@ public ConnectionString(final String connectionString) {
     }
 
     private ReadPreference buildReadPreference(final String readPreferenceType,
-                                               final List<TagSet> tagSetList) {
+                                               final List<TagSet> tagSetList, final long maxStalenessMS) {
         if (readPreferenceType != null) {
-            if (tagSetList.isEmpty()) {
+            if (tagSetList.isEmpty() && maxStalenessMS == 0) {
                 return ReadPreference.valueOf(readPreferenceType);
             }
-            return ReadPreference.valueOf(readPreferenceType, tagSetList);
+            return ReadPreference.valueOf(readPreferenceType, tagSetList, maxStalenessMS, TimeUnit.MILLISECONDS);
+        } else if (!(tagSetList.isEmpty() && maxStalenessMS == 0)) {
+            throw new IllegalArgumentException("Read preference mode must be specified if "
+                                                       + "either read preference tags or max staleness is specified");
         }
         return null;
     }
@@ -873,12 +922,59 @@ public ConnectionString(final String connectionString) {
     }
 
     /**
+     * Gets the stream type value specified in the connection string.
+     * @return the stream type value
+     * @since 3.3
+     */
+    public String getStreamType() {
+        return streamType;
+    }
+
+    /**
+     * Gets the SSL invalidHostnameAllowed value specified in the connection string.
+     *
+     * @return the SSL invalidHostnameAllowed value
+     * @since 3.3
+     */
+    public Boolean getSslInvalidHostnameAllowed() {
+        return sslInvalidHostnameAllowed;
+    }
+
+    /**
      * Gets the required replica set name specified in the connection string.
      * @return the required replica set name
      */
     public String getRequiredReplicaSetName() {
         return requiredReplicaSetName;
     }
+
+    /**
+     *
+     * @return the server selection timeout (in milliseconds), or null if unset
+     * @since 3.3
+     */
+    public Integer getServerSelectionTimeout() {
+        return serverSelectionTimeout;
+    }
+
+    /**
+     *
+     * @return the local threshold (in milliseconds), or null if unset
+     * since 3.3
+     */
+    public Integer getLocalThreshold() {
+        return localThreshold;
+    }
+
+    /**
+     *
+     * @return the heartbeat frequency (in milliseconds), or null if unset
+     * since 3.3
+     */
+    public Integer getHeartbeatFrequency() {
+        return heartbeatFrequency;
+    }
+
 
     @Override
     public String toString() {

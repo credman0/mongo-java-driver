@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,13 @@ import com.mongodb.async.SingleResultCallback;
 import com.mongodb.diagnostics.logging.Logger;
 import com.mongodb.diagnostics.logging.Loggers;
 import com.mongodb.event.CommandListener;
+import org.bson.BsonBinaryReader;
 import org.bson.BsonDocument;
-import org.bson.BsonDocumentReader;
 import org.bson.FieldNameValidator;
 import org.bson.codecs.BsonDocumentCodec;
 import org.bson.codecs.Decoder;
-import org.bson.codecs.DecoderContext;
+import org.bson.codecs.RawBsonDocumentCodec;
+import org.bson.io.ByteBufferBsonInput;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -103,46 +104,49 @@ class CommandProtocol<T> implements Protocol<T> {
                                 connection.getDescription().getServerAddress()));
         }
         long startTimeNanos = System.nanoTime();
-        CommandMessage commandMessage = null;
+        CommandMessage commandMessage = new CommandMessage(namespace.getFullName(), command, slaveOk, fieldNameValidator,
+                ProtocolHelper.getMessageSettings(connection.getDescription()));
+        ResponseBuffers responseBuffers = null;
         try {
-            commandMessage = sendMessage(connection);
-            ResponseBuffers responseBuffers = connection.receiveMessage(commandMessage.getId());
-            ReplyMessage<BsonDocument> replyMessage;
-            try {
-                 replyMessage = new ReplyMessage<BsonDocument>(responseBuffers, new BsonDocumentCodec(), commandMessage.getId());
-            } finally {
-                responseBuffers.close();
+            sendMessage(commandMessage, connection);
+            responseBuffers = connection.receiveMessage(commandMessage.getId());
+            if (!ProtocolHelper.isCommandOk(new BsonBinaryReader(new ByteBufferBsonInput(responseBuffers.getBodyByteBuffer())))) {
+                throw getCommandFailureException(getResponseDocument(responseBuffers, commandMessage, new BsonDocumentCodec()),
+                        connection.getDescription().getServerAddress());
             }
 
-            BsonDocument response = replyMessage.getDocuments().get(0);
-            if (!ProtocolHelper.isCommandOk(response)) {
-                throw getCommandFailureException(response, connection.getDescription().getServerAddress());
-            }
+            T retval = getResponseDocument(responseBuffers, commandMessage, commandResultDecoder);
 
-            T retval = commandResultDecoder.decode(new BsonDocumentReader(response), DecoderContext.builder().build());
             if (commandListener != null) {
-                BsonDocument responseDocumentForEvent = (SECURITY_SENSITIVE_COMMANDS.contains(getCommandName()))
-                                                        ? new BsonDocument() : response;
-                sendCommandSucceededEvent(commandMessage, getCommandName(), responseDocumentForEvent, connection.getDescription(),
-                                          startTimeNanos, commandListener);
+                sendSucceededEvent(connection.getDescription(), startTimeNanos, commandMessage,
+                        getResponseDocument(responseBuffers, commandMessage, new RawBsonDocumentCodec()));
             }
             LOGGER.debug("Command execution completed");
             return retval;
         } catch (RuntimeException e) {
-            if (commandListener != null) {
-                RuntimeException commandEventException = e;
-                if (e instanceof MongoCommandException && (SECURITY_SENSITIVE_COMMANDS.contains(getCommandName()))) {
-                    commandEventException = new MongoCommandException(new BsonDocument(), connection.getDescription().getServerAddress());
-                }
-                sendCommandFailedEvent(commandMessage, getCommandName(), connection.getDescription(), startTimeNanos, commandEventException,
-                                       commandListener);
-            }
+            sendFailedEvent(connection.getDescription(), startTimeNanos, commandMessage, e);
             throw e;
+        } finally {
+            if (responseBuffers != null) {
+                responseBuffers.close();
+            }
         }
+    }
+
+    private static <D> D getResponseDocument(final ResponseBuffers responseBuffers, final CommandMessage commandMessage,
+                                             final Decoder<D> decoder) {
+        responseBuffers.reset();
+        ReplyMessage<D> replyMessage = new ReplyMessage<D>(responseBuffers, decoder, commandMessage.getId());
+
+        return replyMessage.getDocuments().get(0);
     }
 
     @Override
     public void executeAsync(final InternalConnection connection, final SingleResultCallback<T> callback) {
+        long startTimeNanos = System.nanoTime();
+        CommandMessage message = new CommandMessage(namespace.getFullName(), command, slaveOk, fieldNameValidator,
+                ProtocolHelper.getMessageSettings(connection.getDescription()));
+        boolean sentStartedEvent = false;
         try {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(format("Asynchronously sending command {%s : %s} to database %s on connection [%s] to server %s",
@@ -151,18 +155,18 @@ class CommandProtocol<T> implements Protocol<T> {
                                     connection.getDescription().getServerAddress()));
             }
             ByteBufferBsonOutput bsonOutput = new ByteBufferBsonOutput(connection);
-            CommandMessage message = new CommandMessage(namespace.getFullName(), command, slaveOk, fieldNameValidator,
-                                                        ProtocolHelper.getMessageSettings(connection.getDescription()));
-            ProtocolHelper.encodeMessage(message, bsonOutput);
-
-            SingleResultCallback<ResponseBuffers> receiveCallback = new CommandResultCallback<T>(callback, commandResultDecoder,
-                                                                                                 message.getId(),
-                                                                                                 connection.getDescription()
-                                                                                                           .getServerAddress());
+            int documentPosition = ProtocolHelper.encodeMessageWithMetadata(message, bsonOutput).getFirstDocumentPosition();
+            sendStartedEvent(connection, bsonOutput, message, documentPosition);
+            sentStartedEvent = true;
+            SingleResultCallback<ResponseBuffers> receiveCallback = new CommandResultCallback(callback, message,
+                    connection.getDescription(), startTimeNanos);
             connection.sendMessageAsync(bsonOutput.getByteBuffers(), message.getId(),
-                                        new SendMessageCallback<T>(connection, bsonOutput, message.getId(), callback, receiveCallback
-                                        ));
+                                        new SendMessageCallback<T>(connection, bsonOutput, message, getCommandName(), startTimeNanos,
+                                                commandListener, callback, receiveCallback));
         } catch (Throwable t) {
+            if (sentStartedEvent) {
+                sendFailedEvent(connection.getDescription(), startTimeNanos, message, t);
+            }
             callback.onResult(null, t);
         }
     }
@@ -176,32 +180,106 @@ class CommandProtocol<T> implements Protocol<T> {
         return commandName != null ? commandName : command.keySet().iterator().next();
     }
 
-    private CommandMessage sendMessage(final InternalConnection connection) {
+    private void sendMessage(final CommandMessage message, final InternalConnection connection) {
         ByteBufferBsonOutput bsonOutput = new ByteBufferBsonOutput(connection);
         try {
-            CommandMessage message = new CommandMessage(namespace.getFullName(), command, slaveOk, fieldNameValidator,
-                                                        ProtocolHelper.getMessageSettings(connection.getDescription()));
             int documentPosition = message.encodeWithMetadata(bsonOutput).getFirstDocumentPosition();
-            if (commandListener != null) {
-                ByteBufBsonDocument byteBufBsonDocument = createOne(bsonOutput, documentPosition);
-                BsonDocument commandDocument;
-                if (byteBufBsonDocument.containsKey("$query")) {
-                    commandDocument = byteBufBsonDocument.getDocument("$query");
-                    commandName = commandDocument.keySet().iterator().next();
-                } else {
-                    commandDocument = byteBufBsonDocument;
-                    commandName = byteBufBsonDocument.getFirstKey();
-                }
-                BsonDocument commandDocumentForEvent = (SECURITY_SENSITIVE_COMMANDS.contains(commandName))
-                                                       ? new BsonDocument() : commandDocument;
-                sendCommandStartedEvent(message, namespace.getDatabaseName(), commandName,
-                                        commandDocumentForEvent, connection.getDescription(), commandListener);
-            }
+            sendStartedEvent(connection, bsonOutput, message, documentPosition);
 
             connection.sendMessage(bsonOutput.getByteBuffers(), message.getId());
-            return message;
         } finally {
             bsonOutput.close();
+        }
+    }
+
+    private void sendStartedEvent(final InternalConnection connection, final ByteBufferBsonOutput bsonOutput, final CommandMessage message,
+                                  final int documentPosition) {
+        if (commandListener != null) {
+            ByteBufBsonDocument byteBufBsonDocument = createOne(bsonOutput, documentPosition);
+            BsonDocument commandDocument;
+            if (byteBufBsonDocument.containsKey("$query")) {
+                commandDocument = byteBufBsonDocument.getDocument("$query");
+                commandName = commandDocument.keySet().iterator().next();
+            } else {
+                commandDocument = byteBufBsonDocument;
+                commandName = byteBufBsonDocument.getFirstKey();
+            }
+            BsonDocument commandDocumentForEvent = (SECURITY_SENSITIVE_COMMANDS.contains(commandName))
+                                                   ? new BsonDocument() : commandDocument;
+            sendCommandStartedEvent(message, namespace.getDatabaseName(), commandName,
+                                    commandDocumentForEvent, connection.getDescription(), commandListener);
+        }
+    }
+
+    private void sendSucceededEvent(final ConnectionDescription connectionDescription, final long startTimeNanos,
+                                    final CommandMessage commandMessage, final BsonDocument response) {
+        if (commandListener != null) {
+            BsonDocument responseDocumentForEvent = (SECURITY_SENSITIVE_COMMANDS.contains(getCommandName()))
+                    ? new BsonDocument() : response;
+            sendCommandSucceededEvent(commandMessage, getCommandName(), responseDocumentForEvent, connectionDescription,
+                    startTimeNanos, commandListener);
+        }
+    }
+
+    private void sendFailedEvent(final ConnectionDescription connectionDescription, final long startTimeNanos,
+                                 final CommandMessage commandMessage, final Throwable t) {
+        if (commandListener != null) {
+            Throwable commandEventException = t;
+            if (t instanceof MongoCommandException && (SECURITY_SENSITIVE_COMMANDS.contains(getCommandName()))) {
+                commandEventException = new MongoCommandException(new BsonDocument(), connectionDescription.getServerAddress());
+            }
+            sendCommandFailedEvent(commandMessage, getCommandName(), connectionDescription, startTimeNanos, commandEventException,
+                    commandListener);
+        }
+    }
+
+    class CommandResultCallback extends ResponseCallback {
+        private final SingleResultCallback<T> callback;
+        private final CommandMessage message;
+        private final ConnectionDescription connectionDescription;
+        private final long startTimeNanos;
+
+        CommandResultCallback(final SingleResultCallback<T> callback, final CommandMessage message,
+                              final ConnectionDescription connectionDescription, final long startTimeNanos) {
+            super(message.getId(), connectionDescription.getServerAddress());
+            this.callback = callback;
+            this.message = message;
+            this.connectionDescription = connectionDescription;
+            this.startTimeNanos = startTimeNanos;
+        }
+
+        @Override
+        protected void callCallback(final ResponseBuffers responseBuffers, final Throwable throwableFromCallback) {
+            try {
+                if (throwableFromCallback != null) {
+                    throw throwableFromCallback;
+                }
+
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Command execution completed");
+                }
+
+                if (!ProtocolHelper.isCommandOk(new BsonBinaryReader(new ByteBufferBsonInput(responseBuffers.getBodyByteBuffer())))) {
+                    throw getCommandFailureException(getResponseDocument(responseBuffers, message, new BsonDocumentCodec()),
+                            connectionDescription.getServerAddress());
+                }
+
+                if (commandListener != null) {
+                    sendSucceededEvent(connectionDescription, startTimeNanos, message,
+                            getResponseDocument(responseBuffers, message, new RawBsonDocumentCodec()));
+                }
+                callback.onResult(getResponseDocument(responseBuffers, message, commandResultDecoder), null);
+
+            } catch (Throwable t) {
+                sendFailedEvent(connectionDescription, startTimeNanos, message, t);
+                callback.onResult(null, t);
+            } finally {
+                if (responseBuffers != null) {
+                    responseBuffers.close();
+                }
+            }
+
+
         }
     }
 }

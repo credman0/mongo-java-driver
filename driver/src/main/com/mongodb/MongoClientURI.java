@@ -44,6 +44,18 @@ import static com.mongodb.assertions.Assertions.notNull;
  * </ul>
  * <p>The following options are supported (case insensitive):</p>
  *
+ * <p>Server Selection Configuration:</p>
+ * <ul>
+ * <li>{@code serverSelectionTimeoutMS=ms}: How long the driver will wait for server selection to succeed before throwing an exception.</li>
+ * <li>{@code localThresholdMS=ms}: When choosing among multiple MongoDB servers to send a request, the driver will only
+ * send that request to a server whose ping time is less than or equal to the server with the fastest ping time plus the local
+ * threshold.</li>
+ * </ul>
+ * <p>Server Monitoring Configuration:</p>
+ * <ul>
+ * <li>{@code heartbeatFrequencyMS=ms}: The frequency that the driver will attempt to determine the current state of each server in the
+ * cluster.</li>
+ * </ul>
  * <p>Replica set configuration:</p>
  * <ul>
  * <li>{@code replicaSet=name}: Implies that the hosts given are a seed list, and the driver will attempt to find
@@ -53,6 +65,7 @@ import static com.mongodb.assertions.Assertions.notNull;
  * <p>Connection Configuration:</p>
  * <ul>
  * <li>{@code ssl=true|false}: Whether to connect using SSL.</li>
+ * <li>{@code sslInvalidHostNameAllowed=true|false}: Whether to allow invalid host names for SSL connections.</li>
  * <li>{@code connectTimeoutMS=ms}: How long a connection can take to be opened before timing out.</li>
  * <li>{@code socketTimeoutMS=ms}: How long a send or receive on a socket can take before timing out.</li>
  * </ul>
@@ -121,6 +134,10 @@ import static com.mongodb.assertions.Assertions.notNull;
  * <li>Note the empty value for the last one, which means match any secondary as a last resort.</li>
  * <li>Order matters when using multiple readPreferenceTags.</li>
  * </ul>
+ * </li>
+ * <li>{@code maxStalenessMS=ms}. The maximum staleness in milliseconds. For use with any non-primary read preference, the driver estimates
+ * the staleness of each secondary, based on lastWriteDate values provided in server isMaster responses, and selects only those secondaries
+ * whose staleness is less than or equal to maxStalenessMS.  The default is 0, meaning there is no staleness check.
  * </li>
  * </ul>
  * <p>Authentication configuration:</p>
@@ -291,6 +308,18 @@ public class MongoClientURI {
         }
         if (proxied.getSslEnabled() != null) {
             builder.sslEnabled(proxied.getSslEnabled());
+        }
+        if (proxied.getSslInvalidHostnameAllowed() != null) {
+            builder.sslInvalidHostNameAllowed(proxied.getSslInvalidHostnameAllowed());
+        }
+        if (proxied.getServerSelectionTimeout() != null) {
+            builder.serverSelectionTimeout(proxied.getServerSelectionTimeout());
+        }
+        if (proxied.getLocalThreshold() != null) {
+            builder.localThreshold(proxied.getLocalThreshold());
+        }
+        if (proxied.getHeartbeatFrequency() != null) {
+            builder.heartbeatFrequency(proxied.getHeartbeatFrequency());
         }
 
         return builder.build();

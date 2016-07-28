@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2015 MongoDB, Inc.
+ * Copyright 2014-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,30 @@ import org.bson.BsonDouble
 import spock.lang.Specification
 
 import static com.mongodb.CustomMatchers.isTheSameAs
+import static com.mongodb.Fixture.getMongoClient
 import static spock.util.matcher.HamcrestSupport.expect
 
 class DBSpecification extends Specification {
+
+    def 'should get and set read concern'() {
+        when:
+        def db = new DB(getMongoClient(), 'test', new TestOperationExecutor([]))
+
+        then:
+        db.readConcern == ReadConcern.DEFAULT
+
+        when:
+        db.setReadConcern(ReadConcern.MAJORITY)
+
+        then:
+        db.readConcern == ReadConcern.MAJORITY
+
+        when:
+        db.setReadConcern(null)
+
+        then:
+        db.readConcern == ReadConcern.DEFAULT
+    }
 
     def 'should execute CreateCollectionOperation'() {
         given:
@@ -40,7 +61,7 @@ class DBSpecification extends Specification {
 
         then:
         def operation = executor.getWriteOperation() as CreateCollectionOperation
-        expect operation, isTheSameAs(new CreateCollectionOperation('test', 'ctest'))
+        expect operation, isTheSameAs(new CreateCollectionOperation('test', 'ctest', db.getWriteConcern()))
 
         when:
         def options = new BasicDBObject()
@@ -58,7 +79,7 @@ class DBSpecification extends Specification {
         operation = executor.getWriteOperation() as CreateCollectionOperation
 
         then:
-        expect operation, isTheSameAs(new CreateCollectionOperation('test', 'ctest')
+        expect operation, isTheSameAs(new CreateCollectionOperation('test', 'ctest', db.getWriteConcern())
                                               .sizeInBytes(100000)
                                               .maxDocuments(2000)
                                               .capped(true)

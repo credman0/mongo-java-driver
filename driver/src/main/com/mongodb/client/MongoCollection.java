@@ -99,6 +99,7 @@ public interface MongoCollection<TDocument> {
      * @return the {@link com.mongodb.ReadConcern}
      * @since 3.2
      * @mongodb.server.release 3.2
+     * @mongodb.driver.manual reference/readConcern/ Read Concern
      */
     ReadConcern getReadConcern();
 
@@ -142,6 +143,7 @@ public interface MongoCollection<TDocument> {
      * @return a new MongoCollection instance with the different ReadConcern
      * @since 3.2
      * @mongodb.server.release 3.2
+     * @mongodb.driver.manual reference/readConcern/ Read Concern
      */
     MongoCollection<TDocument> withReadConcern(ReadConcern readConcern);
 
@@ -423,7 +425,7 @@ public interface MongoCollection<TDocument> {
      *
      * @param filter a document describing the query filter, which may not be null.
      * @param update a document describing the update, which may not be null. The update to apply must include only update operators.
-     * @return the result of the update one operation
+     * @return the result of the update many operation
      * @throws com.mongodb.MongoWriteException        if the write failed due some other failure specific to the update command
      * @throws com.mongodb.MongoWriteConcernException if the write failed due being unable to fulfil the write concern
      * @throws com.mongodb.MongoException             if the write failed due some other failure
@@ -438,7 +440,7 @@ public interface MongoCollection<TDocument> {
      * @param filter        a document describing the query filter, which may not be null.
      * @param update        a document describing the update, which may not be null. The update to apply must include only update operators.
      * @param updateOptions the options to apply to the update operation
-     * @return the result of the update one operation
+     * @return the result of the update many operation
      * @throws com.mongodb.MongoWriteException        if the write failed due some other failure specific to the update command
      * @throws com.mongodb.MongoWriteConcernException if the write failed due being unable to fulfil the write concern
      * @throws com.mongodb.MongoException             if the write failed due some other failure
@@ -592,7 +594,7 @@ public interface MongoCollection<TDocument> {
      * @param newCollectionNamespace the namespace the collection will be renamed to
      * @throws com.mongodb.MongoServerException if you provide a newCollectionName that is the name of an existing collection, or if the
      *                                          oldCollectionName is the name of a collection that doesn't exist
-     * @mongodb.driver.manual reference/commands/renameCollection Rename collection
+     * @mongodb.driver.manual reference/command/renameCollection Rename collection
      */
     void renameCollection(MongoNamespace newCollectionNamespace);
 
@@ -603,7 +605,7 @@ public interface MongoCollection<TDocument> {
      * @param renameCollectionOptions the options for renaming a collection
      * @throws com.mongodb.MongoServerException if you provide a newCollectionName that is the name of an existing collection and dropTarget
      *                                          is false, or if the oldCollectionName is the name of a collection that doesn't exist
-     * @mongodb.driver.manual reference/commands/renameCollection Rename collection
+     * @mongodb.driver.manual reference/command/renameCollection Rename collection
      */
     void renameCollection(MongoNamespace newCollectionNamespace, RenameCollectionOptions renameCollectionOptions);
 

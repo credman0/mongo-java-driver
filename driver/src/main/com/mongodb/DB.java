@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2015 MongoDB, Inc.
+ * Copyright 2008-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import com.mongodb.operation.CommandReadOperation;
 import com.mongodb.operation.CommandWriteOperation;
 import com.mongodb.operation.CreateCollectionOperation;
 import com.mongodb.operation.CreateUserOperation;
+import com.mongodb.operation.DropDatabaseOperation;
 import com.mongodb.operation.DropUserOperation;
 import com.mongodb.operation.ListCollectionsOperation;
 import com.mongodb.operation.OperationExecutor;
@@ -43,6 +44,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.mongodb.DBCollection.createWriteConcernException;
 import static com.mongodb.MongoCredential.createMongoCRCredential;
 import static com.mongodb.ReadPreference.primary;
 import static java.util.Arrays.asList;
@@ -72,6 +74,7 @@ public class DB {
     private final Codec<DBObject> commandCodec;
     private volatile ReadPreference readPreference;
     private volatile WriteConcern writeConcern;
+    private volatile ReadConcern readConcern;
 
     DB(final Mongo mongo, final String name, final OperationExecutor executor) {
         if (!isValidName(name)) {
@@ -147,6 +150,30 @@ public class DB {
     }
 
     /**
+     * Sets the read concern for this database.
+     *
+     * @param readConcern the read concern to use for this collection
+     * @since 3.3
+     * @mongodb.server.release 3.2
+     * @mongodb.driver.manual reference/readConcern/ Read Concern
+     */
+    public void setReadConcern(final ReadConcern readConcern) {
+        this.readConcern = readConcern;
+    }
+
+    /**
+     * Get the read concern for this database.
+     *
+     * @return the {@link com.mongodb.ReadConcern}
+     * @since 3.3
+     * @mongodb.server.release 3.2
+     * @mongodb.driver.manual reference/readConcern/ Read Concern
+     */
+    public ReadConcern getReadConcern() {
+        return readConcern != null ? readConcern : mongo.getReadConcern();
+    }
+
+    /**
      * <p>Gets a collection with a given name. If the collection does not exist, a new collection is created.</p>
      *
      * <p>This class is NOT part of the public API.  Be prepared for non-binary compatible changes in minor releases.</p>
@@ -188,7 +215,11 @@ public class DB {
      * @mongodb.driver.manual reference/command/dropDatabase/ Drop Database
      */
     public void dropDatabase() {
-        executeCommand(new BsonDocument("dropDatabase", new BsonInt32(1)));
+        try {
+            getExecutor().execute(new DropDatabaseOperation(getName(), getWriteConcern()));
+        } catch (MongoWriteConcernException e) {
+            throw createWriteConcernException(e);
+        }
     }
 
     /**
@@ -254,7 +285,11 @@ public class DB {
      */
     public DBCollection createCollection(final String collectionName, final DBObject options) {
         if (options != null) {
-            executor.execute(getCreateCollectionOperation(collectionName, options));
+            try {
+                executor.execute(getCreateCollectionOperation(collectionName, options));
+            } catch (MongoWriteConcernException e) {
+                throw createWriteConcernException(e);
+            }
         }
         return getCollection(collectionName);
     }
@@ -330,7 +365,7 @@ public class DB {
             validationAction = ValidationAction.fromString((String) options.get("validationAction"));
         }
 
-        return new CreateCollectionOperation(getName(), collectionName)
+        return new CreateCollectionOperation(getName(), collectionName, getWriteConcern())
                    .capped(capped)
                    .sizeInBytes(sizeInBytes)
                    .autoIndex(autoIndex)
@@ -541,12 +576,16 @@ public class DB {
                 throw e;
             }
         }
-        if (userExists) {
-            executor.execute(new UpdateUserOperation(credential, readOnly));
-            return new WriteResult(1, true, null);
-        } else {
-            executor.execute(new CreateUserOperation(credential, readOnly));
-            return new WriteResult(1, false, null);
+        try {
+            if (userExists) {
+                executor.execute(new UpdateUserOperation(credential, readOnly, getWriteConcern()));
+                return new WriteResult(1, true, null);
+            } else {
+                executor.execute(new CreateUserOperation(credential, readOnly, getWriteConcern()));
+                return new WriteResult(1, false, null);
+            }
+        } catch (MongoWriteConcernException e) {
+            throw createWriteConcernException(e);
         }
     }
 
@@ -561,8 +600,12 @@ public class DB {
      */
     @Deprecated
     public WriteResult removeUser(final String userName) {
-        executor.execute(new DropUserOperation(getName(), userName));
-        return new WriteResult(1, true, null);
+        try {
+            executor.execute(new DropUserOperation(getName(), userName, getWriteConcern()));
+            return new WriteResult(1, true, null);
+        } catch (MongoWriteConcernException e) {
+            throw createWriteConcernException(e);
+        }
     }
 
     /**

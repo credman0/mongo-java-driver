@@ -65,18 +65,19 @@ public interface MongoDatabase {
     WriteConcern getWriteConcern();
 
     /**
-     * Get the read concern for the MongoCollection.
+     * Get the read concern for the MongoDatabase.
      *
      * @return the {@link com.mongodb.ReadConcern}
      * @since 3.2
      * @mongodb.server.release 3.2
+     * @mongodb.driver.manual reference/readConcern/ Read Concern
      */
     ReadConcern getReadConcern();
 
     /**
      * Create a new MongoDatabase instance with a different codec registry.
      *
-     * @param codecRegistry the new {@link org.bson.codecs.configuration.CodecRegistry} for the collection
+     * @param codecRegistry the new {@link org.bson.codecs.configuration.CodecRegistry} for the database
      * @return a new MongoDatabase instance with the different codec registry
      */
     MongoDatabase withCodecRegistry(CodecRegistry codecRegistry);
@@ -84,7 +85,7 @@ public interface MongoDatabase {
     /**
      * Create a new MongoDatabase instance with a different read preference.
      *
-     * @param readPreference the new {@link com.mongodb.ReadPreference} for the collection
+     * @param readPreference the new {@link com.mongodb.ReadPreference} for the database
      * @return a new MongoDatabase instance with the different readPreference
      */
     MongoDatabase withReadPreference(ReadPreference readPreference);
@@ -92,18 +93,19 @@ public interface MongoDatabase {
     /**
      * Create a new MongoDatabase instance with a different write concern.
      *
-     * @param writeConcern the new {@link com.mongodb.WriteConcern} for the collection
+     * @param writeConcern the new {@link com.mongodb.WriteConcern} for the database
      * @return a new MongoDatabase instance with the different writeConcern
      */
     MongoDatabase withWriteConcern(WriteConcern writeConcern);
 
     /**
-     * Create a new MongoCollection instance with a different read concern.
+     * Create a new MongoDatabase instance with a different read concern.
      *
-     * @param readConcern the new {@link ReadConcern} for the collection
-     * @return a new MongoCollection instance with the different ReadConcern
+     * @param readConcern the new {@link ReadConcern} for the database
+     * @return a new MongoDatabase instance with the different ReadConcern
      * @since 3.2
      * @mongodb.server.release 3.2
+     * @mongodb.driver.manual reference/readConcern/ Read Concern
      */
     MongoDatabase withReadConcern(ReadConcern readConcern);
 
@@ -168,7 +170,7 @@ public interface MongoDatabase {
      * Drops this database.
      *
      * @param callback the callback that is completed once the database has been dropped
-     * @mongodb.driver.manual reference/commands/dropDatabase/#dbcmd.dropDatabase Drop database
+     * @mongodb.driver.manual reference/command/dropDatabase/#dbcmd.dropDatabase Drop database
      */
     void drop(SingleResultCallback<Void> callback);
 
@@ -202,7 +204,7 @@ public interface MongoDatabase {
      *
      * @param collectionName the name for the new collection to create
      * @param callback       the callback that is completed once the collection has been created
-     * @mongodb.driver.manual reference/commands/create Create Command
+     * @mongodb.driver.manual reference/command/create Create Command
      */
     void createCollection(String collectionName, SingleResultCallback<Void> callback);
 
@@ -212,7 +214,7 @@ public interface MongoDatabase {
      * @param collectionName the name for the new collection to create
      * @param options        various options for creating the collection
      * @param callback       the callback that is completed once the collection has been created
-     * @mongodb.driver.manual reference/commands/create Create Command
+     * @mongodb.driver.manual reference/command/create Create Command
      */
     void createCollection(String collectionName, CreateCollectionOptions options, SingleResultCallback<Void> callback);
 

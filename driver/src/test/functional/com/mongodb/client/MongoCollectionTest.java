@@ -21,6 +21,7 @@ import com.mongodb.Function;
 import com.mongodb.ReadPreference;
 import com.mongodb.WriteConcern;
 import org.bson.Document;
+import org.bson.codecs.BsonValueCodecProvider;
 import org.bson.codecs.DocumentCodec;
 import org.bson.codecs.DocumentCodecProvider;
 import org.bson.codecs.ValueCodecProvider;
@@ -46,7 +47,7 @@ public class MongoCollectionTest extends DatabaseTestCase {
     @Test
     public void testFindAndUpdateWithGenerics() {
         CodecRegistry codecRegistry = fromProviders(asList(new ValueCodecProvider(), new DocumentCodecProvider(),
-                new ConcreteCodecProvider()));
+                new BsonValueCodecProvider(), new ConcreteCodecProvider()));
         MongoCollection<Concrete> collection = database
                 .getCollection(getCollectionName())
                 .withDocumentClass(Concrete.class)
@@ -68,7 +69,7 @@ public class MongoCollectionTest extends DatabaseTestCase {
     public void shouldBeAbleToQueryTypedCollectionAndMapResultsIntoTypedLists() {
         // given
         CodecRegistry codecRegistry = fromProviders(asList(new ValueCodecProvider(), new DocumentCodecProvider(),
-                new ConcreteCodecProvider()));
+                new BsonValueCodecProvider(), new ConcreteCodecProvider()));
         MongoCollection<Concrete> collection = database
                 .getCollection(getCollectionName())
                 .withDocumentClass(Concrete.class)
@@ -165,7 +166,10 @@ public class MongoCollectionTest extends DatabaseTestCase {
     @Test
     public void testDBRefEncodingAndDecoding() {
         // given
-        Document doc = new Document("_id", 1).append("ref", new DBRef("foo", 5));
+        Document doc = new Document("_id", 1)
+                               .append("ref", new DBRef("foo", 5))
+                               .append("refWithDB", new DBRef("db", "foo", 5));
+
 
         // when
         collection.insertOne(doc);

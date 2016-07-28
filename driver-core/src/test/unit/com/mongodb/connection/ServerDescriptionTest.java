@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import org.junit.Test;
 
 import java.net.UnknownHostException;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
 
@@ -58,6 +59,8 @@ public class ServerDescriptionTest {
 
     @Test
     public void testDefaults() throws UnknownHostException {
+        long currentNanoTime = System.nanoTime();
+
         ServerDescription serverDescription = builder().address(new ServerAddress())
                                                                .state(CONNECTED)
                                                                .build();
@@ -89,6 +92,9 @@ public class ServerDescriptionTest {
         assertEquals(0, serverDescription.getMinWireVersion());
         assertEquals(0, serverDescription.getMaxWireVersion());
         assertNull(serverDescription.getElectionId());
+        assertNull(serverDescription.getSetVersion());
+        assertNull(serverDescription.getLastWriteDate());
+        assertTrue(serverDescription.getLastUpdateTime(TimeUnit.NANOSECONDS) > currentNanoTime);
         assertNull(serverDescription.getException());
     }
 
@@ -116,6 +122,9 @@ public class ServerDescriptionTest {
                                               .minWireVersion(1)
                                               .maxWireVersion(2)
                                               .electionId(new ObjectId("123412341234123412341234"))
+                                              .setVersion(new Integer(2))
+                                              .lastWriteDate(new Date(1234L))
+                                              .lastUpdateTimeNanos(40000L)
                                               .exception(exception)
                                               .build();
 
@@ -148,6 +157,9 @@ public class ServerDescriptionTest {
         assertEquals(1, serverDescription.getMinWireVersion());
         assertEquals(2, serverDescription.getMaxWireVersion());
         assertEquals(new ObjectId("123412341234123412341234"), serverDescription.getElectionId());
+        assertEquals(new Integer(2), serverDescription.getSetVersion());
+        assertEquals(new Date(1234), serverDescription.getLastWriteDate());
+        assertEquals(40000L, serverDescription.getLastUpdateTime(TimeUnit.NANOSECONDS));
         assertEquals(exception, serverDescription.getException());
     }
 
@@ -169,8 +181,10 @@ public class ServerDescriptionTest {
                                                                      .state(CONNECTED)
                                                                      .version(new ServerVersion(asList(2, 4, 1)))
                                                                      .minWireVersion(1)
+                                                             .lastWriteDate(new Date())
                                                              .maxWireVersion(2)
-                                                             .electionId(new ObjectId());
+                                                             .electionId(new ObjectId())
+                                                             .setVersion(new Integer(2));
         assertEquals(builder.build(), builder.build());
         assertEquals(builder.build().hashCode(), builder.build().hashCode());
         assertTrue(builder.build().toString().startsWith("ServerDescription"));

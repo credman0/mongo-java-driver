@@ -186,6 +186,19 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
     }
 
     /**
+     * Gets the value of the key if it is a BsonDecimal128, or throws if not.
+     *
+     * @param key the key
+     * @return the value of the key as a BsonDecimal128
+     * @throws org.bson.BsonInvalidOperationException if the document does not contain the key or the value is not of the expected type
+     * @since 3.4
+     */
+    public BsonDecimal128 getDecimal128(final Object key) {
+        throwIfKeyAbsent(key);
+        return get(key).asDecimal128();
+    }
+
+    /**
      * Gets the value of the key if it is a BsonDouble, or throws if not.
      *
      * @param key the key
@@ -234,10 +247,10 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
     }
 
     /**
-     * Gets the value of the key if it is a Timestamp, or throws if not.
+     * Gets the value of the key if it is a BsonTimestamp, or throws if not.
      *
      * @param key the key
-     * @return the value of the key as a Timestamp
+     * @return the value of the key as a BsonTimestamp
      * @throws org.bson.BsonInvalidOperationException if the document does not contain the key or the value is not of the expected type
      */
     public BsonTimestamp getTimestamp(final Object key) {
@@ -258,10 +271,10 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
     }
 
     /**
-     * Gets the value of the key if it is a RegularExpression, or throws if not.
+     * Gets the value of the key if it is a BsonRegularExpression, or throws if not.
      *
      * @param key the key
-     * @return the value of the key as a RegularExpression
+     * @return the value of the key as a BsonRegularExpression
      * @throws org.bson.BsonInvalidOperationException if the document does not contain the key or the value is not of the expected type
      */
     public BsonRegularExpression getRegularExpression(final Object key) {
@@ -270,10 +283,10 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
     }
 
     /**
-     * Gets the value of the key if it is a Binary, or throws if not.
+     * Gets the value of the key if it is a BsonBinary, or throws if not.
      *
      * @param key the key
-     * @return the value of the key as a Binary
+     * @return the value of the key as a BsonBinary
      * @throws org.bson.BsonInvalidOperationException if the document does not contain the key or the value is not of the expected type
      */
     public BsonBinary getBinary(final Object key) {
@@ -360,6 +373,21 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
     }
 
     /**
+     * Returns true if the value of the key is a BsonDecimal128, returns false if the document does not contain the key.
+     *
+     * @param key the key
+     * @return true if the value of the key is a BsonDecimal128, returns false if the document does not contain the key.
+     * @since 3.4
+     */
+    public boolean isDecimal128(final Object key) {
+        if (!containsKey(key)) {
+            return false;
+        }
+        return get(key).isDecimal128();
+    }
+
+
+    /**
      * Returns true if the value of the key is a BsonDouble, returns false if the document does not contain the key.
      *
      * @param key the key
@@ -412,10 +440,10 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
     }
 
     /**
-     * Returns true if the value of the key is a Timestamp, returns false if the document does not contain the key.
+     * Returns true if the value of the key is a BsonTimestamp, returns false if the document does not contain the key.
      *
      * @param key the key
-     * @return true if the value of the key is a Timestamp, returns false if the document does not contain the key.
+     * @return true if the value of the key is a BsonTimestamp, returns false if the document does not contain the key.
      */
     public boolean isTimestamp(final Object key) {
         if (!containsKey(key)) {
@@ -425,10 +453,10 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
     }
 
     /**
-     * Returns true if the value of the key is a ObjectId, returns false if the document does not contain the key.
+     * Returns true if the value of the key is a BsonObjectId, returns false if the document does not contain the key.
      *
      * @param key the key
-     * @return true if the value of the key is a ObjectId, returns false if the document does not contain the key.
+     * @return true if the value of the key is a BsonObjectId, returns false if the document does not contain the key.
      */
     public boolean isObjectId(final Object key) {
         if (!containsKey(key)) {
@@ -438,10 +466,10 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
     }
 
     /**
-     * Returns true if the value of the key is a Binary, returns false if the document does not contain the key.
+     * Returns true if the value of the key is a BsonBinary, returns false if the document does not contain the key.
      *
      * @param key the key
-     * @return true if the value of the key is a Binary, returns false if the document does not contain the key.
+     * @return true if the value of the key is a BsonBinary, returns false if the document does not contain the key.
      */
     public boolean isBinary(final Object key) {
         if (!containsKey(key)) {
@@ -527,7 +555,8 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
     }
 
     /**
-     * Gets the value of the key if it is a BsonInt64, or throws if not.
+     * If the document does not contain the given key, return the given default value.  Otherwise, gets the value of the key as a
+     * BsonInt64.
      *
      * @param key the key
      * @param defaultValue the default value
@@ -539,6 +568,23 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
             return defaultValue;
         }
         return get(key).asInt64();
+    }
+
+    /**
+     * If the document does not contain the given key, return the given default value.  Otherwise, gets the value of the key as a
+     * BsonDecimal128.
+     *
+     * @param key the key
+     * @param defaultValue the default value
+     * @return the value of the key as a BsonDecimal128
+     * @throws org.bson.BsonInvalidOperationException if the document contains the key but the value is not of the expected type
+     * @since 3.4
+     */
+    public BsonDecimal128 getDecimal128(final Object key, final BsonDecimal128 defaultValue) {
+        if (!containsKey(key)) {
+            return defaultValue;
+        }
+        return get(key).asDecimal128();
     }
 
     /**
@@ -607,11 +653,11 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
 
     /**
      * If the document does not contain the given key, return the given default value.  Otherwise, gets the value of the key as a
-     * Timestamp.
+     * BsonTimestamp.
      *
      * @param key the key
      * @param defaultValue the default value
-     * @return the value of the key as a Timestamp
+     * @return the value of the key as a BsonTimestamp
      * @throws org.bson.BsonInvalidOperationException if the document contains the key but the value is not of the expected type
      */
     public BsonTimestamp getTimestamp(final Object key, final BsonTimestamp defaultValue) {
@@ -623,11 +669,11 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
 
     /**
      * If the document does not contain the given key, return the given default value.  Otherwise, gets the value of the key as a
-     * ObjectId.
+     * BsonObjectId.
      *
      * @param key the key
      * @param defaultValue the default value
-     * @return the value of the key as a ObjectId
+     * @return the value of the key as a BsonObjectId
      * @throws org.bson.BsonInvalidOperationException if the document contains the key but the value is not of the expected type
      */
     public BsonObjectId getObjectId(final Object key, final BsonObjectId defaultValue) {
@@ -639,11 +685,11 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
 
     /**
      * If the document does not contain the given key, return the given default value.  Otherwise, gets the value of the key as a
-     * Binary.
+     * BsonBinary.
      *
      * @param key the key
      * @param defaultValue the default value
-     * @return the value of the key as a ObjectId
+     * @return the value of the key as a BsonBinary
      * @throws org.bson.BsonInvalidOperationException if the document contains the key but the value is not of the expected type
      */
     public BsonBinary getBinary(final Object key, final BsonBinary defaultValue) {
@@ -655,11 +701,11 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
 
     /**
      * If the document does not contain the given key, return the given default value.  Otherwise, gets the value of the key as a
-     * ObjectId.
+     * BsonRegularExpression.
      *
      * @param key the key
      * @param defaultValue the default value
-     * @return the value of the key as a ObjectId
+     * @return the value of the key as a BsonRegularExpression
      * @throws org.bson.BsonInvalidOperationException if the document contains the key but the value is not of the expected type
      */
     public BsonRegularExpression getRegularExpression(final Object key, final BsonRegularExpression defaultValue) {

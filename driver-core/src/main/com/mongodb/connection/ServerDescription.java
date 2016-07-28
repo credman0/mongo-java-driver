@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import org.bson.types.ObjectId;
 
 import java.text.DecimalFormat;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -69,6 +70,9 @@ public class ServerDescription {
     private final int maxWireVersion;
 
     private final ObjectId electionId;
+    private final Integer setVersion;
+    private final Date lastWriteDate;
+    private final long lastUpdateTimeNanos;
 
     private final Throwable exception;
 
@@ -113,6 +117,9 @@ public class ServerDescription {
         private int minWireVersion = 0;
         private int maxWireVersion = 0;
         private ObjectId electionId;
+        private Integer setVersion;
+        private Date lastWriteDate;
+        private long lastUpdateTimeNanos = Time.nanoTime();
         private Throwable exception;
 
         /**
@@ -308,6 +315,45 @@ public class ServerDescription {
          */
         public Builder electionId(final ObjectId electionId) {
             this.electionId = electionId;
+            return this;
+        }
+
+        /**
+         * Sets the setVersion reported by this server.
+         *
+         * @param setVersion the set version
+         * @return this
+         */
+        public Builder setVersion(final Integer setVersion) {
+            this.setVersion = setVersion;
+            return this;
+        }
+
+        /**
+         * Sets the lastWriteDate reported by this server
+         *
+         * @param lastWriteDate the last write date, which may be null for servers prior to 3.4
+         * @return this
+         *
+         * @since 3.4
+         * @mongodb.server.release 3.4
+         */
+        public Builder lastWriteDate(final Date lastWriteDate) {
+            this.lastWriteDate = lastWriteDate;
+            return this;
+        }
+
+        /**
+         * Sets the last update time for this description, which is simply the time that the server description was created.
+         * A monotonic clock such as {@link System#nanoTime()} should be used to initialize this value.
+         *
+         * @param lastUpdateTimeNanos the last update time of this server description
+         * @return this
+         *
+         * @since 3.4
+         */
+        public Builder lastUpdateTimeNanos(final long lastUpdateTimeNanos) {
+            this.lastUpdateTimeNanos = lastUpdateTimeNanos;
             return this;
         }
 
@@ -520,6 +566,37 @@ public class ServerDescription {
     }
 
     /**
+     * The replica set setVersion reported by this MongoDB server.
+     *
+     * @return the setVersion, which may be null
+     */
+    public Integer getSetVersion() {
+        return setVersion;
+    }
+
+    /**
+     * Gets the last write date.
+     * @return the last write date, which may be null
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public Date getLastWriteDate() {
+        return lastWriteDate;
+    }
+
+    /**
+     * Gets the time that this server description was created, using a monotonic clock like {@link System#nanoTime()}.
+     *
+     * @param timeUnit the time unit
+     * @return the last update time in the given unit
+     *
+     * @since 3.4
+     */
+    public long getLastUpdateTime(final TimeUnit timeUnit) {
+        return timeUnit.convert(lastUpdateTimeNanos, TimeUnit.NANOSECONDS);
+    }
+
+    /**
      * Returns true if the server has the given tags.  A server of either type {@code ServerType.STANDALONE} or {@code
      * ServerType.SHARD_ROUTER} is considered to have all tags, so this method will always return true for instances of either of those
      * types.
@@ -677,6 +754,16 @@ public class ServerDescription {
         if (electionId != null ? !electionId.equals(that.electionId) : that.electionId != null) {
             return false;
         }
+        if (setVersion != null ? !setVersion.equals(that.setVersion) : that.setVersion != null) {
+            return false;
+        }
+        if (lastWriteDate != null ? !lastWriteDate.equals(that.lastWriteDate) : that.lastWriteDate != null) {
+            return false;
+        }
+
+        if (lastUpdateTimeNanos != that.lastUpdateTimeNanos) {
+            return false;
+        }
 
         // Compare class equality and message as exceptions rarely override equals
         Class<?> thisExceptionClass = exception != null ? exception.getClass() : null;
@@ -707,6 +794,9 @@ public class ServerDescription {
         result = 31 * result + tagSet.hashCode();
         result = 31 * result + (setName != null ? setName.hashCode() : 0);
         result = 31 * result + (electionId != null ? electionId.hashCode() : 0);
+        result = 31 * result + (setVersion != null ? setVersion.hashCode() : 0);
+        result = 31 * result + (lastWriteDate != null ? lastWriteDate.hashCode() : 0);
+        result = 31 * result + (int) (lastUpdateTimeNanos ^ (lastUpdateTimeNanos >>> 32));
         result = 31 * result + (ok ? 1 : 0);
         result = 31 * result + state.hashCode();
         result = 31 * result + version.hashCode();
@@ -729,7 +819,6 @@ public class ServerDescription {
                   + ", version=" + version
                   + ", minWireVersion=" + minWireVersion
                   + ", maxWireVersion=" + maxWireVersion
-                  + ", electionId=" + electionId
                   + ", maxDocumentSize=" + maxDocumentSize
                   + ", roundTripTimeNanos=" + roundTripTimeNanos
                   : "")
@@ -742,7 +831,11 @@ public class ServerDescription {
                   + ", arbiters=" + arbiters
                   + ", primary='" + primary + '\''
                   + ", tagSet=" + tagSet
-                  : "")
+                  + ", electionId=" + electionId
+                  + ", setVersion=" + setVersion
+                  + ", lastWriteDate=" + lastWriteDate
+                  + ", lastUpdateTimeNanos=" + lastUpdateTimeNanos
+                : "")
                + (exception == null ? "" : ", exception=" + translateExceptionToString())
                + '}';
     }
@@ -803,6 +896,9 @@ public class ServerDescription {
         minWireVersion = builder.minWireVersion;
         maxWireVersion = builder.maxWireVersion;
         electionId = builder.electionId;
+        setVersion = builder.setVersion;
+        lastWriteDate = builder.lastWriteDate;
+        lastUpdateTimeNanos = builder.lastUpdateTimeNanos;
         exception = builder.exception;
     }
 }

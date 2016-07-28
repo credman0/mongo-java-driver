@@ -25,6 +25,8 @@ import static com.mongodb.MongoCredential.createMongoCRCredential
 import static com.mongodb.MongoCredential.createMongoX509Credential
 import static com.mongodb.MongoCredential.createPlainCredential
 import static com.mongodb.MongoCredential.createScramSha1Credential
+import static com.mongodb.ReadPreference.primary
+import static com.mongodb.ReadPreference.secondary
 import static com.mongodb.ReadPreference.secondaryPreferred
 import static java.util.Arrays.asList
 import static java.util.concurrent.TimeUnit.MILLISECONDS
@@ -103,31 +105,48 @@ class ConnectionStringSpecification extends Specification {
         connectionString.getConnectTimeout() == 2500;
         connectionString.getSocketTimeout() == 5500;
         connectionString.getWriteConcern() == new WriteConcern(1, 2500, true);
-        connectionString.getReadPreference() == ReadPreference.primary() ;
+        connectionString.getReadPreference() == primary() ;
         connectionString.getRequiredReplicaSetName() == 'test'
         connectionString.getSslEnabled()
+        connectionString.getSslInvalidHostnameAllowed()
+        connectionString.getServerSelectionTimeout() == 25000
+        connectionString.getLocalThreshold() == 30
+        connectionString.getHeartbeatFrequency() == 20000
+        connectionString.getStreamType() == 'netty'
 
         where:
         connectionString <<
                 [new ConnectionString('mongodb://localhost/?minPoolSize=5&maxPoolSize=10&waitQueueMultiple=7&waitQueueTimeoutMS=150&'
                                             + 'maxIdleTimeMS=200&maxLifeTimeMS=300&replicaSet=test&'
                                             + 'connectTimeoutMS=2500&socketTimeoutMS=5500&'
-                                            + 'safe=false&w=1&wtimeout=2500&fsync=true&readPreference=primary&ssl=true'),
+                                            + 'safe=false&w=1&wtimeout=2500&fsync=true&readPreference=primary&ssl=true&streamType=netty&'
+                                            + 'sslInvalidHostNameAllowed=true&'
+                                            + 'serverSelectionTimeoutMS=25000&'
+                                            + 'localThresholdMS=30&'
+                                            + 'heartbeatFrequencyMS=20000'),
                  new ConnectionString('mongodb://localhost/?minPoolSize=5;maxPoolSize=10;waitQueueMultiple=7;waitQueueTimeoutMS=150;'
                                             + 'maxIdleTimeMS=200;maxLifeTimeMS=300;replicaSet=test;'
                                             + 'connectTimeoutMS=2500;socketTimeoutMS=5500;'
-                                            + 'safe=false;w=1;wtimeout=2500;fsync=true;readPreference=primary;ssl=true'),
+                                            + 'safe=false;w=1;wtimeout=2500;fsync=true;readPreference=primary;ssl=true;streamType=netty;'
+                                            + 'sslInvalidHostNameAllowed=true;'
+                                            + 'serverSelectionTimeoutMS=25000;'
+                                            + 'localThresholdMS=30;'
+                                            + 'heartbeatFrequencyMS=20000'),
                  new ConnectionString('mongodb://localhost/test?minPoolSize=5;maxPoolSize=10&waitQueueMultiple=7;waitQueueTimeoutMS=150;'
                                             + 'maxIdleTimeMS=200&maxLifeTimeMS=300&replicaSet=test;'
                                             + 'connectTimeoutMS=2500;'
                                             + 'socketTimeoutMS=5500&'
-                                            + 'safe=false&w=1;wtimeout=2500;fsync=true&readPreference=primary;ssl=true')]
+                                            + 'safe=false&w=1;wtimeout=2500;fsync=true&readPreference=primary;ssl=true&streamType=netty;'
+                                            + 'sslInvalidHostNameAllowed=true;'
+                                            + 'serverSelectionTimeoutMS=25000&'
+                                            + 'localThresholdMS=30;'
+                                            + 'heartbeatFrequencyMS=20000')]
         //for documentation, i.e. the Unroll description for each type
         type << ['amp', 'semi', 'mixed']
     }
 
     @Unroll
-    def 'should throw Exception when the string #cause'() {
+    def 'should throw IllegalArgumentException when the string #cause'() {
         when:
         new ConnectionString(connectionString);
 
@@ -153,7 +172,10 @@ class ConnectionStringSpecification extends Specification {
         'has incomplete options'                    | 'mongodb://localhost/?wTimeout'
         'has an unknown auth mechanism'             | 'mongodb://user:password@localhost/?authMechanism=postItNote'
         'invalid readConcern'                       | 'mongodb://localhost:27017/?readConcernLevel=pickThree'
-
+        'contains tags but no mode'                 | 'mongodb://localhost:27017/?readPreferenceTags=dc:ny'
+        'contains max staleness but no mode'        | 'mongodb://localhost:27017/?maxStalenessMS=100'
+        'contains tags and primary mode'            | 'mongodb://localhost:27017/?readPreference=primary&readPreferenceTags=dc:ny'
+        'contains max staleness and primary mode'   | 'mongodb://localhost:27017/?readPreference=primary&maxStalenessMS=100'
     }
 
     def 'should have correct defaults for options'() {
@@ -171,6 +193,7 @@ class ConnectionStringSpecification extends Specification {
         connectionString.getReadPreference() == null;
         connectionString.getRequiredReplicaSetName() == null
         connectionString.getSslEnabled() == null
+        connectionString.getStreamType() == null
     }
 
     @Unroll
@@ -253,9 +276,15 @@ class ConnectionStringSpecification extends Specification {
 
         where:
         uri                                                              | readPreference
+        new ConnectionString('mongodb://localhost')                      | null
+        new ConnectionString('mongodb://localhost/' +
+                '?readPreference=primary')                               | primary()
+        new ConnectionString('mongodb://localhost/' +
+                '?readPreference=secondary')                             | secondary()
         new ConnectionString('mongodb://localhost/' +
                                    '?readPreference=secondaryPreferred') | secondaryPreferred()
         new ConnectionString('mongodb://localhost/?slaveOk=true')        | secondaryPreferred()
+        new ConnectionString('mongodb://localhost/?slaveOk=false')       | primary()
         new ConnectionString('mongodb://localhost/' +
                                    '?readPreference=secondaryPreferred' +
                                    '&readPreferenceTags=dc:ny,rack:1' +
@@ -264,6 +293,12 @@ class ConnectionStringSpecification extends Specification {
                                                                                                                  new Tag('rack', '1'))),
                                                                                                new TagSet(asList(new Tag('dc', 'ny'))),
                                                                                                new TagSet()])
+        new ConnectionString('mongodb://localhost/' +
+                '?readPreference=secondary' +
+                '&maxStalenessMS=120000')                                | secondary(120000, MILLISECONDS)
+        new ConnectionString('mongodb://localhost/' +
+                '?readPreference=secondary' +
+                '&maxStalenessMS=1')                                     | secondary(1, MILLISECONDS)
     }
 
     @Unroll

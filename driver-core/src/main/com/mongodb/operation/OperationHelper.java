@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright (c) 2008-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,8 @@ import com.mongodb.connection.Connection;
 import com.mongodb.connection.ConnectionDescription;
 import com.mongodb.connection.QueryResult;
 import com.mongodb.connection.ServerVersion;
+import com.mongodb.diagnostics.logging.Logger;
+import com.mongodb.diagnostics.logging.Loggers;
 import org.bson.BsonDocument;
 import org.bson.BsonInt64;
 import org.bson.codecs.Decoder;
@@ -49,6 +51,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 
 final class OperationHelper {
+    public static final Logger LOGGER = Loggers.getLogger("operation");
 
     interface CallableWithConnection<T> {
         T call(Connection connection);
@@ -99,7 +102,6 @@ final class OperationHelper {
         return new MongoClientException("Specifying bypassDocumentValidation with an unacknowledged WriteConcern "
                                         + "is not supported");
     }
-
 
     static <T> QueryBatchCursor<T> createEmptyBatchCursor(final MongoNamespace namespace, final Decoder<T> decoder,
                                                           final ServerAddress serverAddress, final int batchSize) {
@@ -193,6 +195,10 @@ final class OperationHelper {
         return serverIsAtLeastVersion(description, new ServerVersion(asList(3, 1, 9)));
     }
 
+    static boolean serverIsAtLeastVersionThreeDotFour(final ConnectionDescription description) {
+        return serverIsAtLeastVersion(description, new ServerVersion(asList(3, 3, 8)));
+    }
+
     static boolean serverIsAtLeastVersion(final ConnectionDescription description, final ServerVersion serverVersion) {
         return description.getServerVersion().compareTo(serverVersion) >= 0;
     }
@@ -243,15 +249,15 @@ final class OperationHelper {
     }
 
     static void withConnection(final AsyncWriteBinding binding, final AsyncCallableWithConnection callable) {
-        binding.getWriteConnectionSource(errorHandlingCallback(new AsyncCallableWithConnectionCallback(callable)));
+        binding.getWriteConnectionSource(errorHandlingCallback(new AsyncCallableWithConnectionCallback(callable), LOGGER));
     }
 
     static void withConnection(final AsyncReadBinding binding, final AsyncCallableWithConnection callable) {
-        binding.getReadConnectionSource(errorHandlingCallback(new AsyncCallableWithConnectionCallback(callable)));
+        binding.getReadConnectionSource(errorHandlingCallback(new AsyncCallableWithConnectionCallback(callable), LOGGER));
     }
 
     static void withConnection(final AsyncReadBinding binding, final AsyncCallableWithConnectionAndSource callable) {
-        binding.getReadConnectionSource(errorHandlingCallback(new AsyncCallableWithConnectionAndSourceCallback(callable)));
+        binding.getReadConnectionSource(errorHandlingCallback(new AsyncCallableWithConnectionAndSourceCallback(callable), LOGGER));
     }
 
     private static class AsyncCallableWithConnectionCallback implements SingleResultCallback<AsyncConnectionSource> {

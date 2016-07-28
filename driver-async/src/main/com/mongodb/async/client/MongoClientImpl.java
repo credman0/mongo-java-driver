@@ -24,6 +24,8 @@ import com.mongodb.binding.AsyncReadBinding;
 import com.mongodb.binding.AsyncReadWriteBinding;
 import com.mongodb.binding.AsyncWriteBinding;
 import com.mongodb.connection.Cluster;
+import com.mongodb.diagnostics.logging.Logger;
+import com.mongodb.diagnostics.logging.Loggers;
 import com.mongodb.operation.AsyncOperationExecutor;
 import com.mongodb.operation.AsyncReadOperation;
 import com.mongodb.operation.AsyncWriteOperation;
@@ -34,6 +36,7 @@ import static com.mongodb.assertions.Assertions.notNull;
 import static com.mongodb.internal.async.ErrorHandlingResultCallback.errorHandlingCallback;
 
 class MongoClientImpl implements MongoClient {
+    private static final Logger LOGGER = Loggers.getLogger("client");
     private final Cluster cluster;
     private final MongoClientSettings settings;
     private final AsyncOperationExecutor executor;
@@ -94,13 +97,16 @@ class MongoClientImpl implements MongoClient {
             @Override
             public <T> void execute(final AsyncReadOperation<T> operation, final ReadPreference readPreference,
                                     final SingleResultCallback<T> callback) {
-                final SingleResultCallback<T> wrappedCallback = errorHandlingCallback(callback);
+                notNull("operation", operation);
+                notNull("readPreference", readPreference);
+                notNull("callback", callback);
+                final SingleResultCallback<T> errHandlingCallback = errorHandlingCallback(callback, LOGGER);
                 final AsyncReadBinding binding = getReadWriteBinding(readPreference, cluster);
                 operation.executeAsync(binding, new SingleResultCallback<T>() {
                     @Override
                     public void onResult(final T result, final Throwable t) {
                         try {
-                            wrappedCallback.onResult(result, t);
+                            errHandlingCallback.onResult(result, t);
                         } finally {
                             binding.release();
                         }
@@ -110,12 +116,14 @@ class MongoClientImpl implements MongoClient {
 
             @Override
             public <T> void execute(final AsyncWriteOperation<T> operation, final SingleResultCallback<T> callback) {
+                notNull("operation", operation);
+                notNull("callback", callback);
                 final AsyncWriteBinding binding = getReadWriteBinding(ReadPreference.primary(), cluster);
                 operation.executeAsync(binding, new SingleResultCallback<T>() {
                     @Override
                     public void onResult(final T result, final Throwable t) {
                         try {
-                            errorHandlingCallback(callback).onResult(result, t);
+                            errorHandlingCallback(callback, LOGGER).onResult(result, t);
                         } finally {
                             binding.release();
                         }

@@ -7,20 +7,19 @@ title = "What's New"
   pre = "<i class='fa fa-cog'></i>"
 +++
 
-# What's New in 3.1
+# What's New in 3.3
 
-Key new features of the 3.1 driver include:
+New features of the 3.3 driver include:
 
-- Builder support for [updates]({{< ref "builders/updates.md" >}})
-- Builder support for [aggregation stages and accumulators]({{< ref "builders/aggregation.md" >}})
-- Builder support for [geospatial query filters]({{< ref "builders/filters.md#geospatial" >}})
-- Builder support for [index keys]({{< ref "builders/indexes.md" >}})
-- A new [GridFS API]({{< ref "driver/reference/gridfs/index.md" >}}) that is compatible with the CRUD API introduced in the 3.0 
-driver release 
-(not yet available in the async driver)
-- An [event-based API]({{< ref "driver/reference/management/monitoring.md#command-monitoring" >}}) for monitoring all commands that the 
-driver sends to a MongoDB server and all responses received (not yet available in the async driver)
+- [Cluster Monitoring]({{<ref "driver/reference/management/monitoring.md#cluster-monitoring">}}) in the synchronous and asynchronous
+drivers
+- [Command Monitoring]({{<ref "driver/reference/management/monitoring.md#command-monitoring">}}) in the asynchronous driver
+(support in the synchronous driver was added in a previous release)
+- Additional query parameters in the [connection string]({{<ref "driver/reference/connecting/connection-settings.md#connection-string">}})
+- [GridFS]({{<ref "driver-async/reference/gridfs/index.md">}}) in the asynchronous driver
+- Additional configuration options for [GSSAPI authentication]({{<ref "driver/reference/connecting/authenticating.md#gssapi">}}).
+- [JNDI]({{<ref "driver/reference/connecting/jndi.md">}}) ObjectFactory implementation
 
 ## Upgrading
 
-See the [upgrading guide]({{<ref "whats-new/upgrading.md">}}) on how to upgrade to 3.1
+See the [upgrading guide]({{<ref "whats-new/upgrading.md">}}) on how to upgrade to 3.3.

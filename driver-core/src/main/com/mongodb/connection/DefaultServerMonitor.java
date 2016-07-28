@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,11 @@ import com.mongodb.MongoSocketException;
 import com.mongodb.annotations.ThreadSafe;
 import com.mongodb.diagnostics.logging.Logger;
 import com.mongodb.diagnostics.logging.Loggers;
+import com.mongodb.event.ServerHeartbeatFailedEvent;
+import com.mongodb.event.ServerHeartbeatStartedEvent;
+import com.mongodb.event.ServerHeartbeatSucceededEvent;
+import com.mongodb.event.ServerMonitorEventMulticaster;
+import com.mongodb.event.ServerMonitorListener;
 import org.bson.BsonDocument;
 import org.bson.BsonInt32;
 
@@ -27,7 +32,6 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static com.mongodb.assertions.Assertions.isTrue;
 import static com.mongodb.connection.CommandHelper.executeCommand;
 import static com.mongodb.connection.DescriptionHelper.createServerDescription;
 import static com.mongodb.connection.ServerConnectionState.CONNECTING;
@@ -42,12 +46,13 @@ class DefaultServerMonitor implements ServerMonitor {
     private static final Logger LOGGER = Loggers.getLogger("cluster");
 
     private final ServerId serverId;
+    private final ServerMonitorListener serverMonitorListener;
     private final ChangeListener<ServerDescription> serverStateListener;
     private final InternalConnectionFactory internalConnectionFactory;
     private final ConnectionPool connectionPool;
     private final ServerSettings settings;
-    private volatile ServerMonitorRunnable monitor;
-    private volatile Thread monitorThread;
+    private final ServerMonitorRunnable monitor;
+    private final Thread monitorThread;
     private final Lock lock = new ReentrantLock();
     private final Condition condition = lock.newCondition();
     private volatile boolean isClosed;
@@ -57,10 +62,15 @@ class DefaultServerMonitor implements ServerMonitor {
                          final InternalConnectionFactory internalConnectionFactory, final ConnectionPool connectionPool) {
         this.settings = settings;
         this.serverId = serverId;
+        this.serverMonitorListener = settings.getServerMonitorListeners().isEmpty()
+                                             ? new NoOpServerMonitorListener()
+                                             : new ServerMonitorEventMulticaster(settings.getServerMonitorListeners());
         this.serverStateListener = serverStateListener;
         this.internalConnectionFactory = internalConnectionFactory;
         this.connectionPool = connectionPool;
-        monitorThread = createMonitorThread();
+        monitor = new ServerMonitorRunnable();
+        monitorThread = new Thread(monitor, "cluster-" + this.serverId.getClusterId() + "-" + this.serverId.getAddress());
+        monitorThread.setDaemon(true);
         isClosed = false;
     }
 
@@ -80,35 +90,13 @@ class DefaultServerMonitor implements ServerMonitor {
     }
 
     @Override
-    public void invalidate() {
-        isTrue("open", !isClosed);
-        monitor.close();
-        monitorThread.interrupt();
-        monitorThread = createMonitorThread();
-        monitorThread.start();
-    }
-
-    @Override
     public void close() {
-        monitor.close();
-        monitorThread.interrupt();
         isClosed = true;
-    }
-
-    Thread createMonitorThread() {
-        monitor = new ServerMonitorRunnable();
-        Thread monitorThread = new Thread(monitor, "cluster-" + serverId.getClusterId() + "-" + serverId.getAddress());
-        monitorThread.setDaemon(true);
-        return monitorThread;
+        monitorThread.interrupt();
     }
 
     class ServerMonitorRunnable implements Runnable {
-        private volatile boolean monitorIsClosed;
         private final ExponentiallyWeightedMovingAverage averageRoundTripTime = new ExponentiallyWeightedMovingAverage(0.2);
-
-        public void close() {
-            monitorIsClosed = true;
-        }
 
         @Override
         @SuppressWarnings("unchecked")
@@ -117,9 +105,10 @@ class DefaultServerMonitor implements ServerMonitor {
             try {
                 ServerDescription currentServerDescription = getConnectingServerDescription(null);
                 Throwable currentException = null;
-                while (!monitorIsClosed) {
+                while (!isClosed) {
                     ServerDescription previousServerDescription = currentServerDescription;
                     Throwable previousException = currentException;
+                    currentException = null;
                     try {
                         if (connection == null) {
                             connection = internalConnectionFactory.create(serverId);
@@ -157,7 +146,7 @@ class DefaultServerMonitor implements ServerMonitor {
                         currentServerDescription = getConnectingServerDescription(t);
                     }
 
-                    if (!monitorIsClosed) {
+                    if (!isClosed) {
                         try {
                             logStateChange(previousServerDescription, previousException, currentServerDescription, currentException);
                             sendStateChangedEvent(previousServerDescription, currentServerDescription);
@@ -182,12 +171,24 @@ class DefaultServerMonitor implements ServerMonitor {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(format("Checking status of %s", serverId.getAddress()));
             }
-            long start = System.nanoTime();
-            BsonDocument isMasterResult = executeCommand("admin", new BsonDocument("ismaster", new BsonInt32(1)), connection);
-            averageRoundTripTime.addSample(System.nanoTime() - start);
+            serverMonitorListener.serverHearbeatStarted(new ServerHeartbeatStartedEvent(connection.getDescription().getConnectionId()));
 
-            return createServerDescription(serverId.getAddress(), isMasterResult, connection.getDescription().getServerVersion(),
-                                           averageRoundTripTime.getAverage());
+            long start = System.nanoTime();
+            try {
+                BsonDocument isMasterResult = executeCommand("admin", new BsonDocument("ismaster", new BsonInt32(1)), connection);
+                long elapsedTimeNanos = System.nanoTime() - start;
+                averageRoundTripTime.addSample(elapsedTimeNanos);
+
+                serverMonitorListener.serverHeartbeatSucceeded(
+                        new ServerHeartbeatSucceededEvent(connection.getDescription().getConnectionId(), isMasterResult, elapsedTimeNanos));
+
+                return createServerDescription(serverId.getAddress(), isMasterResult, connection.getDescription().getServerVersion(),
+                                               averageRoundTripTime.getAverage());
+            } catch (RuntimeException e) {
+                serverMonitorListener.serverHeartbeatFailed(
+                        new ServerHeartbeatFailedEvent(connection.getDescription().getConnectionId(), System.nanoTime() - start, e));
+                throw e;
+            }
         }
 
         private void sendStateChangedEvent(final ServerDescription previousServerDescription,

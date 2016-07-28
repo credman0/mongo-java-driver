@@ -48,6 +48,7 @@ import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommand
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocolAsync;
 import static com.mongodb.operation.OperationHelper.AsyncCallableWithConnectionAndSource;
 import static com.mongodb.operation.OperationHelper.CallableWithConnectionAndSource;
+import static com.mongodb.operation.OperationHelper.LOGGER;
 import static com.mongodb.operation.OperationHelper.checkValidReadConcern;
 import static com.mongodb.operation.OperationHelper.cursorDocumentToQueryResult;
 import static com.mongodb.operation.OperationHelper.releasingCallback;
@@ -200,6 +201,7 @@ public class AggregateOperation<T> implements AsyncReadOperation<AsyncBatchCurso
      *
      * @return the read concern
      * @since 3.2
+     * @mongodb.driver.manual reference/readConcern/ Read Concern
      */
     public ReadConcern getReadConcern() {
         return readConcern;
@@ -210,6 +212,7 @@ public class AggregateOperation<T> implements AsyncReadOperation<AsyncBatchCurso
      * @param readConcern the read concern
      * @return this
      * @since 3.2
+     * @mongodb.driver.manual reference/readConcern/ Read Concern
      */
     public AggregateOperation<T> readConcern(final ReadConcern readConcern) {
         this.readConcern = notNull("readConcern", readConcern);
@@ -234,11 +237,12 @@ public class AggregateOperation<T> implements AsyncReadOperation<AsyncBatchCurso
         withConnection(binding, new AsyncCallableWithConnectionAndSource() {
             @Override
             public void call(final AsyncConnectionSource source, final AsyncConnection connection, final Throwable t) {
+                SingleResultCallback<AsyncBatchCursor<T>> errHandlingCallback = errorHandlingCallback(callback, LOGGER);
                 if (t != null) {
-                    errorHandlingCallback(callback).onResult(null, t);
+                    errHandlingCallback.onResult(null, t);
                 } else {
-                    final SingleResultCallback<AsyncBatchCursor<T>> wrappedCallback = releasingCallback(errorHandlingCallback(callback),
-                            source, connection);
+                    final SingleResultCallback<AsyncBatchCursor<T>> wrappedCallback = releasingCallback(errHandlingCallback, source,
+                            connection);
                     checkValidReadConcern(source, connection, readConcern, new AsyncCallableWithConnectionAndSource() {
                         @Override
                         public void call(final AsyncConnectionSource source, final AsyncConnection connection, final Throwable t) {

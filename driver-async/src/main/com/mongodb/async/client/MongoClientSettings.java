@@ -30,8 +30,10 @@ import com.mongodb.connection.SocketSettings;
 import com.mongodb.connection.SslSettings;
 import com.mongodb.connection.StreamFactoryFactory;
 import com.mongodb.connection.netty.NettyStreamFactoryFactory;
+import com.mongodb.event.CommandListener;
 import org.bson.codecs.configuration.CodecRegistry;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -50,6 +52,7 @@ public final class MongoClientSettings {
     private final ReadConcern readConcern;
     private final List<MongoCredential> credentialList;
     private final StreamFactoryFactory streamFactoryFactory;
+    private final List<CommandListener> commandListeners;
 
     private final CodecRegistry codecRegistry;
 
@@ -90,6 +93,7 @@ public final class MongoClientSettings {
         private ReadConcern readConcern = ReadConcern.DEFAULT;
         private CodecRegistry codecRegistry = MongoClients.getDefaultCodecRegistry();
         private StreamFactoryFactory streamFactoryFactory = createDefaultStreamFactoryFactory();
+        private final List<CommandListener> commandListeners = new ArrayList<CommandListener>();
 
         private ClusterSettings clusterSettings;
         private SocketSettings socketSettings = SocketSettings.builder().build();
@@ -117,6 +121,7 @@ public final class MongoClientSettings {
             credentialList = settings.getCredentialList();
             codecRegistry = settings.getCodecRegistry();
             streamFactoryFactory = settings.getStreamFactoryFactory();
+            commandListeners.addAll(settings.commandListeners);
 
             clusterSettings = settings.getClusterSettings();
             serverSettings = settings.getServerSettings();
@@ -230,6 +235,7 @@ public final class MongoClientSettings {
          * @return {@code this}
          * @since 3.2
          * @mongodb.server.release 3.2
+         * @mongodb.driver.manual reference/readConcern/ Read Concern
          */
         public Builder readConcern(final ReadConcern readConcern) {
             this.readConcern = notNull("readConcern", readConcern);
@@ -274,6 +280,19 @@ public final class MongoClientSettings {
         }
 
         /**
+         * Adds the given command listener.
+         *
+         * @param commandListener the command listener
+         * @return this
+         * @since 3.3
+         */
+        public Builder addCommandListener(final CommandListener commandListener) {
+            notNull("commandListener", commandListener);
+            commandListeners.add(commandListener);
+            return this;
+        }
+
+        /**
          * Build an instance of {@code MongoClientSettings}.
          *
          * @return the settings from this builder
@@ -286,7 +305,7 @@ public final class MongoClientSettings {
             String streamType = System.getProperty("org.mongodb.async.type", "nio2");
 
             if (streamType.equals("netty")) {
-                return new NettyStreamFactoryFactory();
+                return NettyStreamFactoryFactory.builder().build();
             } else if (streamType.equals("nio2")) {
                 return new AsynchronousSocketChannelStreamFactoryFactory();
             } else {
@@ -334,6 +353,7 @@ public final class MongoClientSettings {
      * @return the read concern
      * @since 3.2
      * @mongodb.server.release 3.2
+     * @mongodb.driver.manual reference/readConcern/ Read Concern
      */
     public ReadConcern getReadConcern() {
         return readConcern;
@@ -359,6 +379,16 @@ public final class MongoClientSettings {
      */
     public StreamFactoryFactory getStreamFactoryFactory() {
         return streamFactoryFactory;
+    }
+
+    /**
+     * Gets the list of added {@code CommandListener}. The default is an empty list.
+     *
+     * @return the unmodifiable list of command listeners
+     * @since 3.3
+     */
+    public List<CommandListener> getCommandListeners() {
+        return Collections.unmodifiableList(commandListeners);
     }
 
     /**
@@ -432,6 +462,7 @@ public final class MongoClientSettings {
         credentialList = builder.credentialList;
         streamFactoryFactory = builder.streamFactoryFactory;
         codecRegistry = builder.codecRegistry;
+        commandListeners = builder.commandListeners;
         clusterSettings = builder.clusterSettings;
         serverSettings = builder.serverSettings;
         socketSettings = builder.socketSettings;

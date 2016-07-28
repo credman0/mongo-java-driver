@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2015 MongoDB, Inc.
+ * Copyright 2008-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import org.bson.types.ObjectId;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -81,12 +82,25 @@ final class DescriptionHelper {
                                 .maxWireVersion(isMasterResult.getInt32("maxWireVersion",
                                                                         new BsonInt32(getDefaultMaxWireVersion())).getValue())
                                 .electionId(getElectionId(isMasterResult))
+                                .setVersion(getSetVersion(isMasterResult))
+                                .lastWriteDate(getLastWriteDate(isMasterResult))
                                 .roundTripTime(roundTripTime, NANOSECONDS)
                                 .ok(CommandHelper.isCommandOk(isMasterResult)).build();
     }
 
+    private static Date getLastWriteDate(final BsonDocument isMasterResult) {
+        if (!isMasterResult.containsKey("lastWrite")) {
+            return null;
+        }
+        return new Date(isMasterResult.getDocument("lastWrite").getDateTime("lastWriteDate").getValue());
+    }
+
     private static ObjectId getElectionId(final BsonDocument isMasterResult) {
         return isMasterResult.containsKey("electionId") ? isMasterResult.getObjectId("electionId").getValue() : null;
+    }
+
+    private static Integer getSetVersion(final BsonDocument isMasterResult) {
+        return isMasterResult.containsKey("setVersion") ? isMasterResult.getNumber("setVersion").intValue() : null;
     }
 
     private static int getMaxMessageSizeBytes(final BsonDocument isMasterResult) {

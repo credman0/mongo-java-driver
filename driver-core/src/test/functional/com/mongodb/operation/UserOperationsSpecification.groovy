@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright (c) 2008-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,10 @@ import com.mongodb.MongoCredential
 import com.mongodb.MongoNamespace
 import com.mongodb.MongoServerException
 import com.mongodb.MongoTimeoutException
+import com.mongodb.MongoWriteConcernException
 import com.mongodb.OperationFunctionalSpecification
 import com.mongodb.ReadPreference
+import com.mongodb.WriteConcern
 import com.mongodb.async.SingleResultCallback
 import com.mongodb.binding.AsyncConnectionSource
 import com.mongodb.binding.AsyncReadBinding
@@ -59,13 +61,15 @@ import static com.mongodb.ClusterFixture.getBinding
 import static com.mongodb.ClusterFixture.getPrimary
 import static com.mongodb.ClusterFixture.getSslSettings
 import static com.mongodb.ClusterFixture.isAuthenticated
+import static com.mongodb.ClusterFixture.isDiscoverableReplicaSet
 import static com.mongodb.ClusterFixture.isSharded
+import static com.mongodb.ClusterFixture.serverVersionAtLeast
 import static com.mongodb.MongoCredential.createCredential
 import static com.mongodb.WriteConcern.ACKNOWLEDGED
 import static java.util.Arrays.asList
 
 class UserOperationsSpecification extends OperationFunctionalSpecification {
-    def credential = createCredential('newUser', databaseName, '123'.toCharArray())
+    def credential = createCredential('\u53f0\u5317', databaseName, 'Ta\u0301ibe\u030Ci'.toCharArray())
 
     def 'an added user should be found'() {
         given:
@@ -275,7 +279,7 @@ class UserOperationsSpecification extends OperationFunctionalSpecification {
                             asList(new InsertRequest(new BsonDocument()))).execute(getBinding(cluster))
 
         then:
-        new CountOperation(getNamespace()).execute(getBinding(cluster)) == 1
+        new CountOperation(getNamespace()).execute(getBinding(cluster)) == 1L
 
         cleanup:
         new DropUserOperation('admin', rwCredential.userName).execute(getBinding())
@@ -312,13 +316,39 @@ class UserOperationsSpecification extends OperationFunctionalSpecification {
         def count = new CountOperation(getNamespace()).execute(getBinding())
 
         then:
-        count == 0
+        count == 0L
 
         cleanup:
         new DropUserOperation('admin', roCredential.userName).execute(getBinding())
         cluster?.close()
     }
 
+    @IgnoreIf({ !serverVersionAtLeast(asList(3, 3, 8)) || !isDiscoverableReplicaSet() })
+    def 'should throw on write concern error when creating a user'() {
+        given:
+        def operation = new CreateUserOperation(credential, false, new WriteConcern(5))
+
+        when:
+        async ? executeAsync(operation) : operation.execute(getBinding())
+
+        then:
+        def ex = thrown(MongoWriteConcernException)
+        ex.code == 100
+
+        when:
+        operation = new UpdateUserOperation(credential, true, new WriteConcern(5))
+        async ? executeAsync(operation) : operation.execute(getBinding())
+
+        then:
+        ex = thrown(MongoWriteConcernException)
+        ex.code == 100
+
+        cleanup:
+        new DropUserOperation(databaseName, credential.userName).execute(getBinding())
+
+        where:
+        async << [true, false]
+    }
 
     def 'should use the ReadBindings readPreference to set slaveOK'() {
         given:

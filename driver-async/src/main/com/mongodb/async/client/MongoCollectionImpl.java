@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright (c) 2008-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,8 @@ import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.DeleteResult;
 import com.mongodb.client.result.UpdateResult;
+import com.mongodb.diagnostics.logging.Logger;
+import com.mongodb.diagnostics.logging.Loggers;
 import com.mongodb.operation.AsyncOperationExecutor;
 import com.mongodb.operation.CountOperation;
 import com.mongodb.operation.CreateIndexesOperation;
@@ -86,6 +88,7 @@ import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 class MongoCollectionImpl<TDocument> implements MongoCollection<TDocument> {
+    private static final Logger LOGGER = Loggers.getLogger("client");
     private final MongoNamespace namespace;
     private final Class<TDocument> documentClass;
     private final ReadPreference readPreference;
@@ -231,7 +234,7 @@ class MongoCollectionImpl<TDocument> implements MongoCollection<TDocument> {
     @Override
     public <TResult> AggregateIterable<TResult> aggregate(final List<? extends Bson> pipeline, final Class<TResult> resultClass) {
         return new AggregateIterableImpl<TDocument, TResult>(namespace, documentClass, resultClass, codecRegistry, readPreference,
-                readConcern, executor, pipeline);
+                readConcern, writeConcern, executor, pipeline);
     }
 
     @Override
@@ -243,7 +246,7 @@ class MongoCollectionImpl<TDocument> implements MongoCollection<TDocument> {
     public <TResult> MapReduceIterable<TResult> mapReduce(final String mapFunction, final String reduceFunction,
                                                           final Class<TResult> resultClass) {
         return new MapReduceIterableImpl<TDocument, TResult>(namespace, documentClass, resultClass, codecRegistry, readPreference,
-                readConcern, executor, mapFunction, reduceFunction);
+                readConcern, writeConcern, executor, mapFunction, reduceFunction);
     }
 
     @Override
@@ -342,7 +345,7 @@ class MongoCollectionImpl<TDocument> implements MongoCollection<TDocument> {
                     public void onResult(final BulkWriteResult result, final Throwable t) {
                         callback.onResult(null, t);
                     }
-                }));
+                }, LOGGER));
     }
 
     @Override
@@ -451,7 +454,7 @@ class MongoCollectionImpl<TDocument> implements MongoCollection<TDocument> {
 
     @Override
     public void drop(final SingleResultCallback<Void> callback) {
-        executor.execute(new DropCollectionOperation(namespace), callback);
+        executor.execute(new DropCollectionOperation(namespace, writeConcern), callback);
     }
 
     @Override
@@ -495,9 +498,10 @@ class MongoCollectionImpl<TDocument> implements MongoCollection<TDocument> {
                               .min(model.getOptions().getMin())
                               .max(model.getOptions().getMax())
                               .bucketSize(model.getOptions().getBucketSize())
-                              .storageEngine(toBsonDocument(model.getOptions().getStorageEngine())));
+                              .storageEngine(toBsonDocument(model.getOptions().getStorageEngine()))
+                              .partialFilterExpression(toBsonDocument(model.getOptions().getPartialFilterExpression())));
         }
-        final CreateIndexesOperation createIndexesOperation = new CreateIndexesOperation(getNamespace(), indexRequests);
+        final CreateIndexesOperation createIndexesOperation = new CreateIndexesOperation(getNamespace(), indexRequests, writeConcern);
         executor.execute(createIndexesOperation, new SingleResultCallback<Void>() {
             @Override
             public void onResult(final Void result, final Throwable t) {
@@ -522,12 +526,12 @@ class MongoCollectionImpl<TDocument> implements MongoCollection<TDocument> {
 
     @Override
     public void dropIndex(final String indexName, final SingleResultCallback<Void> callback) {
-        executor.execute(new DropIndexOperation(namespace, indexName), callback);
+        executor.execute(new DropIndexOperation(namespace, indexName, writeConcern), callback);
     }
 
     @Override
     public void dropIndex(final Bson keys, final SingleResultCallback<Void> callback) {
-        executor.execute(new DropIndexOperation(namespace, keys.toBsonDocument(BsonDocument.class, codecRegistry)), callback);
+        executor.execute(new DropIndexOperation(namespace, keys.toBsonDocument(BsonDocument.class, codecRegistry), writeConcern), callback);
     }
 
     @Override
@@ -543,7 +547,7 @@ class MongoCollectionImpl<TDocument> implements MongoCollection<TDocument> {
     @Override
     public void renameCollection(final MongoNamespace newCollectionNamespace, final RenameCollectionOptions options,
                                  final SingleResultCallback<Void> callback) {
-        executor.execute(new RenameCollectionOperation(getNamespace(), newCollectionNamespace)
+        executor.execute(new RenameCollectionOperation(getNamespace(), newCollectionNamespace, writeConcern)
                          .dropTarget(options.isDropTarget()), callback);
     }
 

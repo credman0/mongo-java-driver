@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright (c) 2008-2016 MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@ package com.mongodb.operation
 
 import category.Async
 import com.mongodb.MongoServerException
+import com.mongodb.MongoWriteConcernException
 import com.mongodb.OperationFunctionalSpecification
+import com.mongodb.WriteConcern
 import com.mongodb.WriteConcernException
 import com.mongodb.client.model.ValidationAction
 import com.mongodb.client.model.ValidationLevel
@@ -32,6 +34,7 @@ import spock.lang.IgnoreIf
 
 import static com.mongodb.ClusterFixture.executeAsync
 import static com.mongodb.ClusterFixture.getBinding
+import static com.mongodb.ClusterFixture.isDiscoverableReplicaSet
 import static com.mongodb.ClusterFixture.serverVersionAtLeast
 import static java.util.Arrays.asList
 
@@ -185,6 +188,27 @@ class CreateCollectionOperationSpecification extends OperationFunctionalSpecific
         }
     }
 
+    def 'should create collection in respect to the autoIndex option'() {
+        given:
+        assert !collectionNameExists(getCollectionName())
+
+        when:
+        new CreateCollectionOperation(getDatabaseName(), getCollectionName())
+                .autoIndex(autoIndex)
+                .execute(getBinding())
+
+        then:
+        new CommandWriteOperation<Document>(getDatabaseName(),
+                new BsonDocument('collStats', new BsonString(getCollectionName())),
+                new DocumentCodec()).execute(getBinding())
+                .getInteger('nindexes') == expectedNumberOfIndexes
+
+        where:
+        autoIndex | expectedNumberOfIndexes
+        true | 1
+        false | 0
+    }
+
     @IgnoreIf({ !serverVersionAtLeast(asList(3, 1, 8)) })
     def 'should allow indexOptionDefaults'() {
         given:
@@ -226,6 +250,24 @@ class CreateCollectionOperationSpecification extends OperationFunctionalSpecific
         then:
         WriteConcernException writeConcernException = thrown()
         writeConcernException.getErrorCode() == 121
+    }
+
+    @IgnoreIf({ !serverVersionAtLeast(asList(3, 3, 8)) || !isDiscoverableReplicaSet() })
+    def 'should throw on write concern error'() {
+        given:
+        assert !collectionNameExists(getCollectionName())
+        def operation = new CreateCollectionOperation(getDatabaseName(), getCollectionName(), new WriteConcern(5))
+
+        when:
+        async ? executeAsync(operation) : operation.execute(getBinding())
+
+        then:
+        def ex = thrown(MongoWriteConcernException)
+        ex.writeConcernError.code == 100
+        ex.writeResult.wasAcknowledged()
+
+        where:
+        async << [true, false]
     }
 
     def getCollectionInfo(String collectionName) {
