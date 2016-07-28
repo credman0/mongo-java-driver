@@ -68,7 +68,7 @@ import java.util.StringTokenizer;
  * For SRP, there are three (3) files:
  * <ol>
  * <li>The password configuration file: tpasswd.conf. It contains the pairs
- * &lt;N,g> indexed by a number for each pair used for a user. By default, this
+ * &lt;N,g&gt; indexed by a number for each pair used for a user. By default, this
  * file's pathname is constructed from the base password file pathname by
  * prepending it with the ".conf" suffix.</li>
  * <li>The base password file: tpasswd. It contains the related password
@@ -217,13 +217,13 @@ public class PasswordFile
   }
 
   /**
-   * Checks if the current configuration file contains the &lt;N, g> pair for
+   * Checks if the current configuration file contains the &lt;N, g&gt; pair for
    * the designated <code>index</code>.
    * 
-   * @param index a string representing 1-digit identification of an &lt;N, g>
+   * @param index a string representing 1-digit identification of an &lt;N, g&gt;
    *          pair used.
    * @return <code>true</code> if the designated <code>index</code> is that
-   *         of a known &lt;N, g> pair, and <code>false</code> otherwise.
+   *         of a known &lt;N, g&gt; pair, and <code>false</code> otherwise.
    * @throws IOException if an exception occurs during the process.
    * @see SRPRegistry#N_2048_BITS
    * @see SRPRegistry#N_1536_BITS
@@ -244,7 +244,7 @@ public class PasswordFile
    * Returns a pair of strings representing the pair of <code>N</code> and
    * <code>g</code> MPIs for the designated <code>index</code>.
    * 
-   * @param index a string representing 1-digit identification of an &lt;N, g>
+   * @param index a string representing 1-digit identification of an &lt;N, g&gt;
    *          pair to look up.
    * @return a pair of strings, arranged in an array, where the first (at index
    *         position #0) is the repesentation of the MPI <code>N</code>, and
@@ -469,7 +469,7 @@ public class PasswordFile
    * @param user the user's name.
    * @param s the user's salt.
    * @param password the user's password
-   * @param index the index of the &lt;N, g> pair to use for this user.
+   * @param index the index of the &lt;N, g&gt; pair to use for this user.
    * @return a {@link java.util.Map} of user verifiers.
    * @throws UnsupportedEncodingException if the US-ASCII decoder is not
    *           available on this platform.

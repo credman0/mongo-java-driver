@@ -78,10 +78,10 @@ package gnusasl.javax.security.sasl;
  *      break;
  *   }
  *}
- *if (ss.isComplete() && (status == SUCCESS)) {
+ *if (ss.isComplete() &amp;&amp; (status == SUCCESS)) {
  *   String qop = (String) sc.getNegotiatedProperty(Sasl.QOP);
  *   if (qop != null
- *         && (qop.equalsIgnoreCase("auth-int")
+ *         &amp;&amp; (qop.equalsIgnoreCase("auth-int")
  *            || qop.equalsIgnoreCase("auth-conf"))) {
  *      // Use SaslServer.wrap() and SaslServer.unwrap() for future
  *      // communication with client

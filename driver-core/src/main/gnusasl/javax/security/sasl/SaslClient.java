@@ -65,7 +65,7 @@ package gnusasl.javax.security.sasl;
  *      ? sc.evaluateChallenge(new byte[0]) : null;
  *LdapResult res = ldap.sendBindRequest(dn, sc.getName(), response);
  *while (!sc.isComplete()
- *       && ((res.status == SASL_BIND_IN_PROGRESS) || (res.status == SUCCESS))) {
+ *       &amp;&amp; ((res.status == SASL_BIND_IN_PROGRESS) || (res.status == SUCCESS))) {
  *   response = sc.evaluateChallenge( res.getBytes() );
  *   if (res.status == SUCCESS) {
  *      // we're done; don't expect to send another BIND
@@ -77,10 +77,10 @@ package gnusasl.javax.security.sasl;
  *   }
  *   res = ldap.sendBindRequest(dn, sc.getName(), response);
  *}
- *if (sc.isComplete() && (res.status == SUCCESS) ) {
+ *if (sc.isComplete() &amp;&amp; (res.status == SUCCESS) ) {
  *   String qop = (String)sc.getNegotiatedProperty(Sasl.QOP);
  *   if ((qop != null)
- *         && (qop.equalsIgnoreCase("auth-int")
+ *         &amp;&amp; (qop.equalsIgnoreCase("auth-int")
  *            || qop.equalsIgnoreCase("auth-conf"))) {
  *      // Use SaslClient.wrap() and SaslClient.unwrap() for future
  *      // communication with server

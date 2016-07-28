@@ -45,10 +45,10 @@ import javax.security.auth.callback.Callback;
 
 /**
  * Underlying security services instantiate and pass a <code>NameCallback</code>
- * to the <code>handle()</code> method of a {@link CallbackHandler} to retrieve
+ * to the <code>handle()</code> method of a CallbackHandler to retrieve
  * name information.
  *
- * @see CallbackHandler
+ * CallbackHandler
  */
 public class NameCallback implements Callback, Serializable
 {

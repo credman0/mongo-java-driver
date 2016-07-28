@@ -45,10 +45,10 @@ import javax.security.auth.callback.Callback;
 
 /**
  * Underlying security services instantiate and pass a <code>TextInputCallback</code>
- * to the <code>handle()</code> method of a {@link CallbackHandler} to retrieve
+ * to the <code>handle()</code> method of a CallbackHandler to retrieve
  * generic text information.
  *
- * @see CallbackHandler
+ * CallbackHandler
  */
 public class TextInputCallback implements Callback, Serializable
 {

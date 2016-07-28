@@ -54,7 +54,7 @@ import gnu.java.security.util.Util;
  * <ol>
  * <li><a
  * href="http://www.cs.technion.ac.il/~biham/Reports/Tiger/">Tiger: A
- * Fast New Hash Function</a>, Ross Anderson and Eli Biham.</a></li>
+ * Fast New Hash Function, Ross Anderson and Eli Biham.</a></li>
  * </ol>
  */
 public class Tiger

@@ -46,10 +46,10 @@ import javax.security.auth.callback.Callback;
 /**
  * Underlying security services instantiate and pass a
  * <code>ChoiceCallback</code> to the <code>handle()</code> method of a
- * {@link CallbackHandler} to display a list of choices and to retrieve the
+ * CallbackHandler to display a list of choices and to retrieve the
  * selected choice(s).
  *
- * @see CallbackHandler
+ * CallbackHandler
  */
 public class ChoiceCallback implements Callback, Serializable
 {
