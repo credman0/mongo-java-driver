@@ -53,8 +53,8 @@ def javaCodeCheckedProjects = subprojects.findAll { !['util', 'mongo-java-driver
 
 configure(coreProjects) {
     evaluationDependsOn(':util')
-    group = 'org.mongodb'
-    version = '3.11.0-SNAPSHOT'
+    group = 'org.credman0'
+    version = 'master'
 
     repositories {
         google()
