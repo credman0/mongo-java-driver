@@ -1,12 +1,26 @@
 ## Release Notes
+Mongo driver for Android originally ported by matfur92 using classes from https://github.com/koterpillar/android-sasl to fix javax.security.sasl
 
-This is an Android porting of Java MongoDB Driver - 3.4.0-SNAPSHOT version - updated on 28 July 2016.
+I needed a more recent version of the driver, so I updated the port. I'm hesitatant to say that it is complete, because in the end it does not compile without disabling tests (though I believe that this is because there are now broken tests, rather than necessarily broken software). As such, you may use this as you wish, but be aware that I ported this out of need, and did not use an incredible amount of care.
 
-You can download compiled JAR from
+The driver should install to the local maven repository with:
+```/gradlew -Pgroup=org.credman0 -Pversion=master -xtest -xinit build -xcheckstyleMain publishToMavenLocal -xcodenarcTest -xclirr -xspotbugsMain -xsignMavenJavaPublication install```
 
-https://github.com/matfur92/mongo-java-driver/blob/gh-pages/JARs/mongo-java-driver-3.2.0-SNAPSHOT.jar?raw=true 
+and then it can be used by adding
+```
+repositories {
+     ...
+     mavenLocal()
+     ...
+ }
+ ```
+ 
+then:
 
-https://github.com/matfur92/mongo-java-driver/blob/gh-pages/JARs/mongo-java-driver-3.4.0-SNAPSHOT.jar?raw=true 
-
-I've forked ufficial mongodb/mongo-java-driver (master branch) and added classes from https://github.com/koterpillar/android-sasl to fix javax.security.sasl on Android.
-/gradlew -Pgroup=org.credman0 -Pversion=master -xtest -xinit build -xcheckstyleMain publishToMavenLocal -xcodenarcTest -xclirr -xspotbugsMain -xsignMavenJavaPublication install
+```
+dependencies {
+    ...
+    implementation 'org.credman0:mongo-java-driver:master'
+    ...
+}
+```
