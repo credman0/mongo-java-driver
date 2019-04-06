@@ -254,7 +254,7 @@ apply from: 'gradle/testColorOutput.gradle'
 //////////////////////////////////////////
 // Root project configuration           //
 //////////////////////////////////////////
-task wrapper(type: Wrapper) {
+wrapper {
     gradleVersion = '4.10.2'
 }
 
