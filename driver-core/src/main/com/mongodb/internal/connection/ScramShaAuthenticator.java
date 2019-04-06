@@ -20,12 +20,12 @@ import com.mongodb.AuthenticationMechanism;
 import com.mongodb.MongoCredential;
 import com.mongodb.ServerAddress;
 import com.mongodb.internal.authentication.SaslPrep;
+import gnusasl.javax.security.sasl.SaslException;
 import org.bson.internal.Base64;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import javax.security.sasl.SaslClient;
-import javax.security.sasl.SaslException;
+import gnusasl.javax.security.sasl.SaslClient;
 import java.io.UnsupportedEncodingException;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
