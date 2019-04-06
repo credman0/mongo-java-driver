@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import com.mongodb.WriteConcern;
 import com.mongodb.async.SingleResultCallback;
 import com.mongodb.binding.AsyncWriteBinding;
 import com.mongodb.binding.WriteBinding;
+import com.mongodb.client.model.Collation;
 import com.mongodb.connection.AsyncConnection;
 import com.mongodb.connection.Connection;
 import com.mongodb.connection.ConnectionDescription;
@@ -45,12 +46,14 @@ import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommand
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocolAsync;
 import static com.mongodb.operation.DocumentHelper.putIfNotZero;
 import static com.mongodb.operation.DocumentHelper.putIfTrue;
+import static com.mongodb.operation.OperationHelper.AsyncCallableWithConnection;
 import static com.mongodb.operation.OperationHelper.LOGGER;
+import static com.mongodb.operation.OperationHelper.validateCollation;
 import static com.mongodb.operation.OperationHelper.releasingCallback;
-import static com.mongodb.operation.OperationHelper.serverIsAtLeastVersionThreeDotTwo;
+import static com.mongodb.internal.operation.ServerVersionHelper.serverIsAtLeastVersionThreeDotTwo;
 import static com.mongodb.operation.OperationHelper.withConnection;
-import static com.mongodb.operation.WriteConcernHelper.appendWriteConcernToCommand;
-import static com.mongodb.operation.WriteConcernHelper.throwOnWriteConcernError;
+import static com.mongodb.internal.operation.WriteConcernHelper.appendWriteConcernToCommand;
+import static com.mongodb.internal.operation.WriteConcernHelper.throwOnWriteConcernError;
 import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
@@ -64,6 +67,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
  * @mongodb.driver.manual core/map-reduce Map Reduce
  * @since 3.0
  */
+@Deprecated
 public class
 MapReduceToCollectionOperation implements AsyncWriteOperation<MapReduceStatistics>, WriteOperation<MapReduceStatistics> {
     private final MongoNamespace namespace;
@@ -84,6 +88,7 @@ MapReduceToCollectionOperation implements AsyncWriteOperation<MapReduceStatistic
     private boolean sharded;
     private boolean nonAtomic;
     private Boolean bypassDocumentValidation;
+    private Collation collation;
     private static final List<String> VALID_ACTIONS = asList("replace", "merge", "reduce");
 
     /**
@@ -120,6 +125,16 @@ MapReduceToCollectionOperation implements AsyncWriteOperation<MapReduceStatistic
         this.reduceFunction = notNull("reduceFunction", reduceFunction);
         this.collectionName = notNull("collectionName", collectionName);
         this.writeConcern = writeConcern;
+    }
+
+    /**
+     * Gets the namespace.
+     *
+     * @return the namespace
+     * @since 3.4
+     */
+    public MongoNamespace getNamespace() {
+        return namespace;
     }
 
     /**
@@ -460,6 +475,31 @@ MapReduceToCollectionOperation implements AsyncWriteOperation<MapReduceStatistic
     }
 
     /**
+     * Returns the collation options
+     *
+     * @return the collation options
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public Collation getCollation() {
+        return collation;
+    }
+
+    /**
+     * Sets the collation options
+     *
+     * <p>A null value represents the server default.</p>
+     * @param collation the collation options to use
+     * @return this
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public MapReduceToCollectionOperation collation(final Collation collation) {
+        this.collation = collation;
+        return this;
+    }
+
+    /**
      * Executing this will return a cursor with your results in.
      *
      * @param binding the binding
@@ -470,6 +510,7 @@ MapReduceToCollectionOperation implements AsyncWriteOperation<MapReduceStatistic
         return withConnection(binding, new OperationHelper.CallableWithConnection<MapReduceStatistics>() {
             @Override
             public MapReduceStatistics call(final Connection connection) {
+                validateCollation(connection, collation);
                 return executeWrappedCommandProtocol(binding, namespace.getDatabaseName(), getCommand(connection.getDescription()),
                         connection, transformer());
             }
@@ -478,15 +519,25 @@ MapReduceToCollectionOperation implements AsyncWriteOperation<MapReduceStatistic
 
     @Override
     public void executeAsync(final AsyncWriteBinding binding, final SingleResultCallback<MapReduceStatistics> callback) {
-        withConnection(binding, new OperationHelper.AsyncCallableWithConnection() {
+        withConnection(binding, new AsyncCallableWithConnection() {
             @Override
             public void call(final AsyncConnection connection, final Throwable t) {
                 SingleResultCallback<MapReduceStatistics> errHandlingCallback = errorHandlingCallback(callback, LOGGER);
                 if (t != null) {
                     errHandlingCallback.onResult(null, t);
                 } else {
-                    executeWrappedCommandProtocolAsync(binding, namespace.getDatabaseName(), getCommand(connection.getDescription()),
-                            connection, transformer(), releasingCallback(errHandlingCallback, connection));
+                    final SingleResultCallback<MapReduceStatistics> wrappedCallback = releasingCallback(errHandlingCallback, connection);
+                    validateCollation(connection, collation, new AsyncCallableWithConnection() {
+                        @Override
+                        public void call(final AsyncConnection connection, final Throwable t) {
+                            if (t != null) {
+                                wrappedCallback.onResult(null, t);
+                            } else {
+                                executeWrappedCommandProtocolAsync(binding, namespace.getDatabaseName(),
+                                        getCommand(connection.getDescription()), connection, transformer(), wrappedCallback);
+                            }
+                        }
+                    });
                 }
             }
         });
@@ -536,7 +587,6 @@ MapReduceToCollectionOperation implements AsyncWriteOperation<MapReduceStatistic
         if (getDatabaseName() != null) {
             outputDocument.put("db", new BsonString(getDatabaseName()));
         }
-
         BsonDocument commandDocument = new BsonDocument("mapreduce", new BsonString(namespace.getCollectionName()))
                                            .append("map", getMapFunction())
                                            .append("reduce", getReduceFunction())
@@ -554,6 +604,9 @@ MapReduceToCollectionOperation implements AsyncWriteOperation<MapReduceStatistic
         }
         if (description != null) {
             appendWriteConcernToCommand(writeConcern, commandDocument, description);
+        }
+        if (collation != null) {
+            commandDocument.put("collation", collation.asDocument());
         }
         return commandDocument;
     }

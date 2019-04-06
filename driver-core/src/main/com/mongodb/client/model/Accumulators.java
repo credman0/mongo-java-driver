@@ -1,9 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,7 +20,7 @@ package com.mongodb.client.model;
  * Builders for accumulators used in the group pipeline stage of an aggregation pipeline.
  *
  * @mongodb.driver.manual core/aggregation-pipeline/ Aggregation pipeline
- * @mongodb.driver.manual operator/aggregation/group/#accumulator-operator Accumulators
+ * @mongodb.driver.manual reference/operator/aggregation/group/#accumulator-operator Accumulators
  * @mongodb.driver.manual meta/aggregation-quick-reference/#aggregation-expressions Expressions
  * @mongodb.server.release 2.2
  * @since 3.1

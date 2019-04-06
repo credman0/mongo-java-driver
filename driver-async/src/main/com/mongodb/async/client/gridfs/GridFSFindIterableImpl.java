@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,6 +23,8 @@ import com.mongodb.async.SingleResultCallback;
 import com.mongodb.async.client.FindIterable;
 import com.mongodb.async.client.MongoIterable;
 import com.mongodb.client.gridfs.model.GridFSFile;
+import com.mongodb.client.model.Collation;
+import com.mongodb.lang.Nullable;
 import org.bson.conversions.Bson;
 
 import java.util.Collection;
@@ -31,12 +33,12 @@ import java.util.concurrent.TimeUnit;
 final class GridFSFindIterableImpl implements GridFSFindIterable {
     private final FindIterable<GridFSFile> underlying;
 
-    public GridFSFindIterableImpl(final FindIterable<GridFSFile> underlying) {
+    GridFSFindIterableImpl(final FindIterable<GridFSFile> underlying) {
         this.underlying = underlying;
     }
 
     @Override
-    public GridFSFindIterable sort(final Bson sort) {
+    public GridFSFindIterable sort(@Nullable final Bson sort) {
         underlying.sort(sort);
         return this;
     }
@@ -54,7 +56,7 @@ final class GridFSFindIterableImpl implements GridFSFindIterable {
     }
 
     @Override
-    public GridFSFindIterable filter(final Bson filter) {
+    public GridFSFindIterable filter(@Nullable final Bson filter) {
         underlying.filter(filter);
         return this;
     }
@@ -94,6 +96,17 @@ final class GridFSFindIterableImpl implements GridFSFindIterable {
     @Override
     public GridFSFindIterable batchSize(final int batchSize) {
         underlying.batchSize(batchSize);
+        return this;
+    }
+
+    @Override
+    public Integer getBatchSize() {
+        return underlying.getBatchSize();
+    }
+
+    @Override
+    public GridFSFindIterable collation(@Nullable final Collation collation) {
+        underlying.collation(collation);
         return this;
     }
 

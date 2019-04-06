@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -37,13 +37,14 @@ import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.security.SecureRandom
 
-import static GridFSTestHelper.run
 import static com.mongodb.async.client.Fixture.getDefaultDatabaseName
 import static com.mongodb.async.client.Fixture.getMongoClient
-import static com.mongodb.async.client.gridfs.GridFSTestHelper.runSlow
+import static com.mongodb.async.client.TestHelper.run
+import static com.mongodb.async.client.TestHelper.runSlow
 import static com.mongodb.async.client.gridfs.helpers.AsyncStreamHelper.toAsyncInputStream
 import static com.mongodb.async.client.gridfs.helpers.AsyncStreamHelper.toAsyncOutputStream
 import static com.mongodb.client.model.Filters.eq
+import static com.mongodb.client.model.Updates.unset
 import static org.bson.codecs.configuration.CodecRegistries.fromCodecs
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries
 
@@ -77,14 +78,15 @@ class GridFSBucketSmokeTestSpecification extends FunctionalSpecification {
         def content = multiChunk ? multiChunkString : singleChunkString
         def contentBytes = content as byte[]
         def expectedLength = contentBytes.length
-        def expectedMD5 = MessageDigest.getInstance('MD5').digest(contentBytes).encodeHex().toString()
+        def expectedMD5 = md5Disabled ? null : MessageDigest.getInstance('MD5').digest(contentBytes).encodeHex().toString()
+        def bucket = gridFSBucket.withDisableMD5(md5Disabled)
         ObjectId fileId
 
         when:
         if (direct) {
-            fileId = run(gridFSBucket.&uploadFromStream, 'myFile', toAsyncInputStream(content.getBytes()));
+            fileId = run(bucket.&uploadFromStream, 'myFile', toAsyncInputStream(content.getBytes()));
         } else {
-            def outputStream = gridFSBucket.openUploadStream('myFile')
+            def outputStream = bucket.openUploadStream('myFile')
             run(outputStream.&write, ByteBuffer.wrap(contentBytes))
             run(outputStream.&close)
             fileId = outputStream.getObjectId()
@@ -95,11 +97,11 @@ class GridFSBucketSmokeTestSpecification extends FunctionalSpecification {
         run(chunksCollection.&count) == chunkCount
 
         when:
-        def fileInfo = run(gridFSBucket.find().filter(eq('_id', fileId)).&first)
+        def fileInfo = run(bucket.find().filter(eq('_id', fileId)).&first)
 
         then:
         fileInfo.getId().getValue() == fileId
-        fileInfo.getChunkSize() == gridFSBucket.getChunkSizeBytes()
+        fileInfo.getChunkSize() == bucket.getChunkSizeBytes()
         fileInfo.getLength() == expectedLength
         fileInfo.getMD5() == expectedMD5
         fileInfo.getMetadata() == null
@@ -107,10 +109,10 @@ class GridFSBucketSmokeTestSpecification extends FunctionalSpecification {
         when:
         def byteBuffer = ByteBuffer.allocate(fileInfo.getLength() as int)
         if (direct) {
-            run(gridFSBucket.openDownloadStream(fileId).&read, byteBuffer)
+            run(bucket.openDownloadStream(fileId).&read, byteBuffer)
         } else {
             def outputStream = toAsyncOutputStream(byteBuffer)
-            run(gridFSBucket.&downloadToStream, fileId, outputStream)
+            run(bucket.&downloadToStream, fileId, outputStream)
             run(outputStream.&close)
         }
 
@@ -118,11 +120,13 @@ class GridFSBucketSmokeTestSpecification extends FunctionalSpecification {
         byteBuffer.array() == contentBytes
 
         where:
-        description              | multiChunk | chunkCount | direct
-        'a small file directly'  | false      | 1          | true
-        'a small file to stream' | false      | 1          | false
-        'a large file directly'  | true       | 5          | true
-        'a large file to stream' | true       | 5          | false
+        description                     | multiChunk | chunkCount | direct | md5Disabled
+        'a small file directly'         | false      | 1          | true   | false
+        'a small file to stream'        | false      | 1          | false  | false
+        'a large file directly'         | true       | 5          | true   | false
+        'a large file to stream'        | true       | 5          | false  | false
+        'a small file directly no md5'  | false      | 1          | true   | true
+        'a small file to stream no md5' | false      | 1          | false  | true
     }
 
     @Category(Slow)
@@ -226,7 +230,7 @@ class GridFSBucketSmokeTestSpecification extends FunctionalSpecification {
         given:
         def contentBytes = new byte[9000];
         new SecureRandom().nextBytes(contentBytes);
-        def bufferSize = 3000
+        def bufferSize = 2000
         def options = new GridFSUploadOptions().chunkSizeBytes(4000)
 
         when:
@@ -264,6 +268,24 @@ class GridFSBucketSmokeTestSpecification extends FunctionalSpecification {
 
         when:
         fileBuffer.put(byteBuffer.array())
+        totalRead += read
+        read = run(downloadStream.&read, byteBuffer.clear())
+        then:
+        read == bufferSize
+
+        when:
+        fileBuffer.put(byteBuffer.array())
+        totalRead += read
+        read = run(downloadStream.&read, byteBuffer.clear())
+
+        then:
+        read == 1000
+
+        when:
+        def remaining = new byte[read]
+        byteBuffer.flip()
+        byteBuffer.get(remaining, 0, 1000)
+        fileBuffer.put(remaining)
         totalRead += read
         read = run(downloadStream.&read, byteBuffer.clear())
 
@@ -492,6 +514,48 @@ class GridFSBucketSmokeTestSpecification extends FunctionalSpecification {
 
         then:
         fileAsDocument.getDocument('metadata').getBinary('uuid').getType() == 4 as byte
+    }
+
+    @Unroll
+    def 'should handle missing file name data when downloading #description'() {
+        given:
+        def content = multiChunkString
+        def contentBytes = content as byte[]
+        ObjectId fileId
+
+        when:
+        if (direct) {
+            fileId = run(gridFSBucket.&uploadFromStream, 'myFile', toAsyncInputStream(content.getBytes()));
+        } else {
+            def outputStream = gridFSBucket.openUploadStream('myFile')
+            run(outputStream.&write, ByteBuffer.wrap(contentBytes))
+            run(outputStream.&close)
+            fileId = outputStream.getObjectId()
+        }
+
+        then:
+        run(filesCollection.&count) == 1
+
+        when:
+        // Remove filename
+        run(filesCollection.&updateOne, eq('_id', fileId), unset('filename'))
+
+        def byteBuffer = ByteBuffer.allocate(contentBytes.length)
+        if (direct) {
+            run(gridFSBucket.openDownloadStream(fileId).&read, byteBuffer)
+        } else {
+            def outputStream = toAsyncOutputStream(byteBuffer)
+            run(gridFSBucket.&downloadToStream, fileId, outputStream)
+            run(outputStream.&close)
+        }
+
+        then:
+        byteBuffer.array() == contentBytes
+
+        where:
+        description | direct
+        'directly'  | true
+        'a stream'  | false
     }
 }
 

@@ -1,14 +1,14 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the 'License');
+ * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an 'AS IS' BASIS,
+ * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
@@ -36,12 +36,12 @@ import static util.GroovyHelpers.areEqual
 class RawBsonDocumentSpecification extends Specification {
 
     static emptyDocument = new BsonDocument()
-    static emptyRawDocument = new RawBsonDocument(emptyDocument, new BsonDocumentCodec());
+    static emptyRawDocument = new RawBsonDocument(emptyDocument, new BsonDocumentCodec())
     static document = new BsonDocument()
             .append('a', new BsonInt32(1))
             .append('b', new BsonInt32(2))
             .append('c', new BsonDocument('x', BsonBoolean.TRUE))
-            .append('d', new BsonArray(asList(new BsonDocument('y', BsonBoolean.FALSE), new BsonInt32(1))))
+            .append('d', new BsonArray(asList(new BsonDocument('y', BsonBoolean.FALSE), new BsonArray(asList(new BsonInt32(1))))))
 
     def 'constructors should throw if parameters are invalid'() {
         when:
@@ -100,10 +100,10 @@ class RawBsonDocumentSpecification extends Specification {
         then:
         rawDocument == document
         byteBuf.asNIO().order() == ByteOrder.LITTLE_ENDIAN
-        byteBuf.remaining() == 58
+        byteBuf.remaining() == 66
 
         when:
-        def actualBytes = new byte[58]
+        def actualBytes = new byte[66]
         byteBuf.get(actualBytes)
 
         then:
@@ -156,6 +156,24 @@ class RawBsonDocumentSpecification extends Specification {
         rawDocument.get('e') == null
         rawDocument.get('x') == null
         rawDocument.get('y') == null
+
+        where:
+        rawDocument << createRawDocumentVariants()
+    }
+
+    def 'should return RawBsonDocument for sub documents and RawBsonArray for arrays'() {
+        expect:
+        rawDocument.get('a') instanceof BsonInt32
+        rawDocument.get('b') instanceof BsonInt32
+        rawDocument.get('c') instanceof RawBsonDocument
+        rawDocument.get('d') instanceof RawBsonArray
+        rawDocument.get('d').asArray().get(0) instanceof RawBsonDocument
+        rawDocument.get('d').asArray().get(1) instanceof RawBsonArray
+
+        and:
+        rawDocument.getDocument('c').getBoolean('x').value
+        !rawDocument.get('d').asArray().get(0).asDocument().getBoolean('y').value
+        rawDocument.get('d').asArray().get(1).asArray().get(0).asInt32().value == 1
 
         where:
         rawDocument << createRawDocumentVariants()
@@ -250,6 +268,33 @@ class RawBsonDocumentSpecification extends Specification {
         rawDocument << createRawDocumentVariants()
     }
 
+    def 'should get first key'() {
+        expect:
+        document.getFirstKey() == 'a'
+
+        where:
+        rawDocument << createRawDocumentVariants()
+    }
+
+    def 'getFirstKey should throw NoSuchElementException if the document is empty'() {
+        when:
+        emptyRawDocument.getFirstKey()
+
+        then:
+        thrown(NoSuchElementException)
+    }
+
+    def 'should create BsonReader'() {
+        when:
+        def reader = document.asBsonReader()
+
+        then:
+        new BsonDocumentCodec().decode(reader, DecoderContext.builder().build()) == document
+
+        cleanup:
+        reader.close()
+    }
+
     def 'toJson should return equivalent JSON'() {
         expect:
         new RawBsonDocumentCodec().decode(new JsonReader(rawDocument.toJson()), DecoderContext.builder().build()) == document
@@ -260,10 +305,10 @@ class RawBsonDocumentSpecification extends Specification {
 
     def 'toJson should respect default JsonWriterSettings'() {
         given:
-        def writer = new StringWriter();
+        def writer = new StringWriter()
 
         when:
-        new BsonDocumentCodec().encode(new JsonWriter(writer), document, EncoderContext.builder().build());
+        new BsonDocumentCodec().encode(new JsonWriter(writer), document, EncoderContext.builder().build())
 
         then:
         writer.toString() == rawDocument.toJson()
@@ -275,10 +320,10 @@ class RawBsonDocumentSpecification extends Specification {
     def 'toJson should respect JsonWriterSettings'() {
         given:
         def jsonWriterSettings = new JsonWriterSettings(JsonMode.SHELL)
-        def writer = new StringWriter();
+        def writer = new StringWriter()
 
         when:
-        new RawBsonDocumentCodec().encode(new JsonWriter(writer, jsonWriterSettings), rawDocument, EncoderContext.builder().build());
+        new RawBsonDocumentCodec().encode(new JsonWriter(writer, jsonWriterSettings), rawDocument, EncoderContext.builder().build())
 
         then:
         writer.toString() == rawDocument.toJson(jsonWriterSettings)
@@ -381,7 +426,6 @@ class RawBsonDocumentSpecification extends Specification {
 
         where:
         localRawDocument << createRawDocumentVariants()
-
     }
 
     private static List<RawBsonDocument> createRawDocumentVariants() {
@@ -424,7 +468,7 @@ class RawBsonDocumentSpecification extends Specification {
 
     class TestEntry implements Map.Entry<String, BsonValue> {
 
-        private final String key;
+        private final String key
         private BsonValue value
 
         TestEntry(String key, BsonValue value) {

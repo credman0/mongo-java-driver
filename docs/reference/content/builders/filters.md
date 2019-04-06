@@ -16,7 +16,7 @@ any method that expects a query filter.
 For brevity, you may choose to import the methods of the `Filters` class statically:
 
 ```java
-import com.mongodb.client.model.Filters.*;
+import static com.mongodb.client.model.Filters.*;
 ```
   
 All the examples below assume this static import.
@@ -88,8 +88,16 @@ This example creates a filter that selects all documents where the `price` field
 is equal to `true` or the `qty` field value is less than `20`:
   
 ```java
-and(or(eq("price", 0.99), eq("price", 1.99)
-    or(eq("sale", true), lt("qty", 20)))
+and(
+    or(
+        eq("price", 0.99), 
+        eq("price", 1.99)
+    ),
+    or(
+        eq("sale", true), 
+        lt("qty", 20)
+    )
+)
 ```
 
 This query cannot be constructed using an implicit and operation, because it uses the `$or` operator more than once.  So it will render as:

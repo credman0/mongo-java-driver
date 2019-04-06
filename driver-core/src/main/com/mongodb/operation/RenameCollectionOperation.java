@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,8 @@ import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommand
 import static com.mongodb.operation.OperationHelper.LOGGER;
 import static com.mongodb.operation.OperationHelper.releasingCallback;
 import static com.mongodb.operation.OperationHelper.withConnection;
-import static com.mongodb.operation.WriteConcernHelper.appendWriteConcernToCommand;
-import static com.mongodb.operation.WriteConcernHelper.writeConcernErrorTransformer;
+import static com.mongodb.internal.operation.WriteConcernHelper.appendWriteConcernToCommand;
+import static com.mongodb.operation.CommandOperationHelper.writeConcernErrorTransformer;
 
 /**
  * An operation that renames the given collection to the new name.
@@ -47,6 +47,7 @@ import static com.mongodb.operation.WriteConcernHelper.writeConcernErrorTransfor
  * @mongodb.driver.manual reference/command/renameCollection renameCollection
  * @since 3.0
  */
+@Deprecated
 public class RenameCollectionOperation implements AsyncWriteOperation<Void>, WriteOperation<Void> {
     private final MongoNamespace originalNamespace;
     private final MongoNamespace newNamespace;

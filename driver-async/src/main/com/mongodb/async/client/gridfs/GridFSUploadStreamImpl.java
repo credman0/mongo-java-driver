@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,6 +23,8 @@ import com.mongodb.client.gridfs.model.GridFSFile;
 import com.mongodb.client.result.DeleteResult;
 import com.mongodb.diagnostics.logging.Logger;
 import com.mongodb.diagnostics.logging.Loggers;
+import com.mongodb.lang.Nullable;
+import com.mongodb.async.client.ClientSession;
 import org.bson.BsonValue;
 import org.bson.Document;
 import org.bson.types.Binary;
@@ -39,6 +41,7 @@ import static com.mongodb.internal.async.ErrorHandlingResultCallback.errorHandli
 
 final class GridFSUploadStreamImpl implements GridFSUploadStream {
     private static final Logger LOGGER = Loggers.getLogger("client.gridfs");
+    private final ClientSession clientSession;
     private final MongoCollection<GridFSFile> filesCollection;
     private final MongoCollection<Document> chunksCollection;
     private final BsonValue fileId;
@@ -46,6 +49,7 @@ final class GridFSUploadStreamImpl implements GridFSUploadStream {
     private final int chunkSizeBytes;
     private final Document metadata;
     private final MessageDigest md5;
+    private final boolean disableMD5;
     private final GridFSIndexCheck indexCheck;
     private final Object closeAndWritingLock = new Object();
 
@@ -63,9 +67,11 @@ final class GridFSUploadStreamImpl implements GridFSUploadStream {
     private int chunkIndex;
     /* accessed only when writing */
 
-    GridFSUploadStreamImpl(final MongoCollection<GridFSFile> filesCollection, final MongoCollection<Document> chunksCollection,
-                           final BsonValue fileId, final String filename, final int chunkSizeBytes, final Document metadata,
+    GridFSUploadStreamImpl(@Nullable final ClientSession clientSession, final MongoCollection<GridFSFile> filesCollection,
+                           final MongoCollection<Document> chunksCollection, final BsonValue fileId, final String filename,
+                           final int chunkSizeBytes, final boolean disableMD5, @Nullable final Document metadata,
                            final GridFSIndexCheck indexCheck) {
+        this.clientSession = clientSession;
         this.filesCollection = notNull("files collection", filesCollection);
         this.chunksCollection = notNull("chunks collection", chunksCollection);
         this.fileId = notNull("File Id", fileId);
@@ -73,7 +79,8 @@ final class GridFSUploadStreamImpl implements GridFSUploadStream {
         this.chunkSizeBytes = chunkSizeBytes;
         this.metadata = metadata;
         this.indexCheck = indexCheck;
-        md5 = getDigest();
+        this.disableMD5 = disableMD5;
+        md5 = createMD5Digest();
         chunkIndex = 0;
         bufferOffset = 0;
         buffer = new byte[chunkSizeBytes];
@@ -99,13 +106,20 @@ final class GridFSUploadStreamImpl implements GridFSUploadStream {
         if (!takeWritingLock(errHandlingCallback)) {
             return;
         }
-        chunksCollection.deleteMany(new Document("files_id", fileId), new SingleResultCallback<DeleteResult>() {
+
+        SingleResultCallback<DeleteResult> deleteCallback = new SingleResultCallback<DeleteResult>() {
             @Override
             public void onResult(final DeleteResult result, final Throwable t) {
                 releaseWritingLock();
                 errHandlingCallback.onResult(null, t);
             }
-        });
+        };
+
+        if (clientSession != null) {
+            chunksCollection.deleteMany(clientSession, new Document("files_id", fileId), deleteCallback);
+        } else {
+            chunksCollection.deleteMany(new Document("files_id", fileId), deleteCallback);
+        }
     }
 
     @Override
@@ -165,23 +179,29 @@ final class GridFSUploadStreamImpl implements GridFSUploadStream {
                     errHandlingCallback.onResult(null, t);
                 } else {
                     GridFSFile gridFSFile = new GridFSFile(fileId, filename, lengthInBytes, chunkSizeBytes, new Date(),
-                            toHex(md5.digest()), metadata);
+                            getMD5Digest(), metadata);
 
-                    filesCollection.insertOne(gridFSFile, new SingleResultCallback<Void>() {
+                    SingleResultCallback<Void> insertCallback = new SingleResultCallback<Void>() {
                         @Override
                         public void onResult(final Void result, final Throwable t) {
                             buffer = null;
                             releaseWritingLock();
                             errHandlingCallback.onResult(result, t);
                         }
-                    });
+                    };
+
+                    if (clientSession != null) {
+                        filesCollection.insertOne(clientSession, gridFSFile, insertCallback);
+                    } else {
+                        filesCollection.insertOne(gridFSFile, insertCallback);
+                    }
                 }
             }
         });
     }
 
     private void write(final int amount, final ByteBuffer src, final SingleResultCallback<Integer> callback) {
-        if (!takeWritingLock(callback)){
+        if (!takeWritingLock(callback)) {
             return;
         }
 
@@ -231,24 +251,29 @@ final class GridFSUploadStreamImpl implements GridFSUploadStream {
     }
 
     private void writeChunk(final SingleResultCallback<Void> callback) {
-        if (md5 == null) {
-            callback.onResult(null, new MongoGridFSException("No MD5 message digest available, cannot upload file"));
+        if (md5 == null && !disableMD5) {
+            callback.onResult(null, new MongoGridFSException("No MD5 message digest available. "
+                    + "Use `GridFSBucket.withDisableMD5(true)` to disable creating a MD5 hash."));
         } else if (bufferOffset > 0) {
-            chunksCollection.insertOne(new Document("files_id", fileId).append("n", chunkIndex).append("data", getData()),
-                    new SingleResultCallback<Void>() {
-                        @Override
-                        public void onResult(final Void result, final Throwable t) {
-                            if (t != null) {
-                                callback.onResult(null, t);
-                            } else {
-                                md5.update(buffer);
-                                chunkIndex++;
-                                bufferOffset = 0;
-                                callback.onResult(null, null);
-                            }
-                        }
+            Document insertDocument = new Document("files_id", fileId).append("n", chunkIndex).append("data", getData());
+            SingleResultCallback<Void> insertCallback = new SingleResultCallback<Void>() {
+                @Override
+                public void onResult(final Void result, final Throwable t) {
+                    if (t != null) {
+                        callback.onResult(null, t);
+                    } else {
+                        updateMD5();
+                        chunkIndex++;
+                        bufferOffset = 0;
+                        callback.onResult(null, null);
                     }
-            );
+                }
+            };
+            if (clientSession != null) {
+                chunksCollection.insertOne(clientSession, insertDocument, insertCallback);
+            } else {
+                chunksCollection.insertOne(insertDocument, insertCallback);
+            }
         } else {
             callback.onResult(null, null);
         }
@@ -294,11 +319,27 @@ final class GridFSUploadStreamImpl implements GridFSUploadStream {
         callback.onResult(null, new MongoGridFSException("The AsyncOutputStream does not support concurrent writing."));
     }
 
-    private static MessageDigest getDigest() {
-        try {
-            return MessageDigest.getInstance("MD5");
-        } catch (NoSuchAlgorithmException e) {
+    @Nullable
+    private MessageDigest createMD5Digest() {
+        if (disableMD5) {
             return null;
+        } else {
+            try {
+                return MessageDigest.getInstance("MD5");
+            } catch (NoSuchAlgorithmException e) {
+                return null;
+            }
+        }
+    }
+
+    @Nullable
+    private String getMD5Digest() {
+        return md5 != null ? toHex(md5.digest()) : null;
+    }
+
+    private void updateMD5() {
+        if (md5 != null) {
+            md5.update(buffer);
         }
     }
 }

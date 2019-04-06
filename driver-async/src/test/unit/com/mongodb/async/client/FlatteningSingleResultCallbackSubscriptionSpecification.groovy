@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,6 +20,9 @@ import com.mongodb.Block
 import com.mongodb.MongoException
 import com.mongodb.async.SingleResultCallback
 import spock.lang.Specification
+
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 import static com.mongodb.async.client.Observables.observeAndFlatten
 
@@ -45,7 +48,8 @@ class FlatteningSingleResultCallbackSubscriptionSpecification extends Specificat
 
     def 'should call onComplete after all data has been consumed'() {
         given:
-        SingleResultCallback<List> listSingleResultCallback
+        SingleResultCallback<List> listSingleResultCallback = null
+        def executor = Executors.newFixedThreadPool(5)
         def observer = new TestObserver()
         observeAndFlatten(new Block<SingleResultCallback<List>>() {
             @Override
@@ -64,12 +68,17 @@ class FlatteningSingleResultCallbackSubscriptionSpecification extends Specificat
         observer.assertNoTerminalEvent()
 
         when:
-        listSingleResultCallback.onResult([1, 2, 3, 4], null)
+        100.times { executor.submit { observer.requestMore(1) } }
+        listSingleResultCallback?.onResult([1, 2, 3, 4], null)
 
         then:
         observer.assertNoErrors()
         observer.assertReceivedOnNext([1, 2, 3, 4])
         observer.assertTerminalEvent()
+
+        cleanup:
+        executor?.shutdown()
+        executor?.awaitTermination(10, TimeUnit.SECONDS)
     }
 
     def 'should throw an error if request is less than 1'() {

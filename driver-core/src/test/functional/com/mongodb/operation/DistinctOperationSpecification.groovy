@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,12 @@
 
 package com.mongodb.operation
 
-import category.Async
 import com.mongodb.MongoExecutionTimeoutException
 import com.mongodb.MongoNamespace
 import com.mongodb.OperationFunctionalSpecification
 import com.mongodb.ReadConcern
 import com.mongodb.ReadPreference
-import com.mongodb.async.FutureResultCallback
-import com.mongodb.async.SingleResultCallback
+import com.mongodb.ServerAddress
 import com.mongodb.binding.AsyncConnectionSource
 import com.mongodb.binding.AsyncReadBinding
 import com.mongodb.binding.ConnectionSource
@@ -31,31 +29,37 @@ import com.mongodb.binding.ReadBinding
 import com.mongodb.client.test.Worker
 import com.mongodb.client.test.WorkerCodec
 import com.mongodb.connection.AsyncConnection
+import com.mongodb.connection.ClusterId
 import com.mongodb.connection.Connection
 import com.mongodb.connection.ConnectionDescription
+import com.mongodb.connection.ConnectionId
+import com.mongodb.connection.ServerId
 import com.mongodb.connection.ServerVersion
+import com.mongodb.session.SessionContext
 import org.bson.BsonBoolean
 import org.bson.BsonDocument
 import org.bson.BsonInt32
 import org.bson.BsonInt64
 import org.bson.BsonInvalidOperationException
 import org.bson.BsonString
+import org.bson.BsonTimestamp
 import org.bson.Document
+import org.bson.codecs.BsonDocumentCodec
 import org.bson.codecs.BsonValueCodecProvider
 import org.bson.codecs.Decoder
 import org.bson.codecs.DocumentCodec
 import org.bson.codecs.DocumentCodecProvider
+import org.bson.codecs.StringCodec
 import org.bson.codecs.ValueCodecProvider
 import org.bson.types.ObjectId
-import org.junit.experimental.categories.Category
 import spock.lang.IgnoreIf
 
 import static com.mongodb.ClusterFixture.disableMaxTimeFailPoint
 import static com.mongodb.ClusterFixture.enableMaxTimeFailPoint
 import static com.mongodb.ClusterFixture.executeAsync
-import static com.mongodb.ClusterFixture.getBinding
 import static com.mongodb.ClusterFixture.serverVersionAtLeast
-import static java.util.Arrays.asList
+import static com.mongodb.connection.ServerType.STANDALONE
+import static com.mongodb.operation.OperationReadConcernHelper.appendReadConcernToCommand
 import static java.util.concurrent.TimeUnit.MILLISECONDS
 import static java.util.concurrent.TimeUnit.SECONDS
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders
@@ -77,7 +81,7 @@ class DistinctOperationSpecification extends OperationFunctionalSpecification {
         then:
         operation.getFilter() == null
         operation.getMaxTime(MILLISECONDS) == 0
-        operation.getReadConcern() == ReadConcern.DEFAULT
+        operation.getCollation() == null
     }
 
     def 'should set optional values correctly'(){
@@ -88,12 +92,12 @@ class DistinctOperationSpecification extends OperationFunctionalSpecification {
         DistinctOperation operation = new DistinctOperation(getNamespace(), 'name', stringDecoder)
                 .maxTime(10, MILLISECONDS)
                 .filter(filter)
-                .readConcern(ReadConcern.MAJORITY)
+                .collation(defaultCollation)
 
         then:
         operation.getFilter() == filter
         operation.getMaxTime(MILLISECONDS) == 10
-        operation.getReadConcern() == ReadConcern.MAJORITY
+        operation.getCollation() == defaultCollation
     }
 
     def 'should be able to distinct by name'() {
@@ -102,31 +106,16 @@ class DistinctOperationSpecification extends OperationFunctionalSpecification {
         Document sam = new Document('name', 'Sam').append('age', 21)
         Document pete2 = new Document('name', 'Pete').append('age', 25)
         getCollectionHelper().insertDocuments(new DocumentCodec(), pete, sam, pete2)
+        DistinctOperation operation = new DistinctOperation(getNamespace(), 'name', stringDecoder)
 
         when:
-        DistinctOperation operation = new DistinctOperation(getNamespace(), 'name', stringDecoder)
-        def result = operation.execute(getBinding()).next();
+        def results = executeAndCollectBatchCursorResults(operation, async)
 
         then:
-        result == ['Pete', 'Sam']
-    }
+        results  == ['Pete', 'Sam']
 
-    @Category(Async)
-    def 'should be able to distinct by name asynchronously'() {
-        given:
-        Document pete = new Document('name', 'Pete').append('age', 38)
-        Document sam = new Document('name', 'Sam').append('age', 21)
-        Document pete2 = new Document('name', 'Pete').append('age', 25)
-        getCollectionHelper().insertDocuments(new DocumentCodec(), pete, sam, pete2)
-
-        when:
-        DistinctOperation operation = new DistinctOperation(getNamespace(), 'name', stringDecoder)
-        def futureResult = new FutureResultCallback()
-        executeAsync(operation).next(futureResult)
-        def result = futureResult.get(60, SECONDS)
-
-        then:
-        result == ['Pete', 'Sam']
+        where:
+        async << [true, false]
     }
 
     def 'should be able to distinct by name with find'() {
@@ -135,33 +124,17 @@ class DistinctOperationSpecification extends OperationFunctionalSpecification {
         Document sam = new Document('name', 'Sam').append('age', 21)
         Document pete2 = new Document('name', 'Pete').append('age', 25)
         getCollectionHelper().insertDocuments(new DocumentCodec(), pete, sam, pete2)
+        def operation = new DistinctOperation(getNamespace(), 'name', stringDecoder)
+                .filter(new BsonDocument('age', new BsonInt32(25)))
 
         when:
-        DistinctOperation operation = new DistinctOperation(getNamespace(), 'name', stringDecoder)
-                .filter(new BsonDocument('age', new BsonInt32(25)))
-        def result = operation.execute(getBinding());
+        def results = executeAndCollectBatchCursorResults(operation, async)
 
         then:
-        result.next() == ['Pete']
-    }
+        results  == ['Pete']
 
-    @Category(Async)
-    def 'should be able to distinct by name with find asynchronously'() {
-        given:
-        Document pete = new Document('name', 'Pete').append('age', 38)
-        Document sam = new Document('name', 'Sam').append('age', 21)
-        Document pete2 = new Document('name', 'Pete').append('age', 25)
-        getCollectionHelper().insertDocuments(new DocumentCodec(), pete, sam, pete2)
-
-        when:
-        DistinctOperation operation = new DistinctOperation(getNamespace(), 'name', stringDecoder)
-                .filter(new BsonDocument('age', new BsonInt32(25)))
-        def futureResult = new FutureResultCallback()
-        executeAsync(operation).next(futureResult)
-        def result = futureResult.get(60, SECONDS)
-
-        then:
-        result == ['Pete']
+        where:
+        async << [true, false]
     }
 
     def 'should be able to distinct with custom codecs'() {
@@ -182,44 +155,18 @@ class DistinctOperationSpecification extends OperationFunctionalSpecification {
                 .append('numberOfJobs', sam.numberOfJobs)
 
         getCollectionHelper().insertDocuments(new Document('worker', peteDocument), new Document('worker', samDocument));
+        DistinctOperation operation = new DistinctOperation(getNamespace(), 'worker', new WorkerCodec())
 
         when:
-        DistinctOperation operation = new DistinctOperation(getNamespace(), 'worker', new WorkerCodec())
-        def result = operation.execute(getBinding()).next();
+        def results = executeAndCollectBatchCursorResults(operation, async)
 
         then:
-        result == [pete, sam]
+        results  == [pete, sam]
+
+        where:
+        async << [true, false]
     }
 
-    @Category(Async)
-    def 'should be able to distinct with custom codecs asynchronously'() {
-        given:
-        Worker pete = new Worker(new ObjectId(), 'Pete', 'handyman', new Date(), 3)
-        Worker sam = new Worker(new ObjectId(), 'Sam', 'plumber', new Date(), 7)
-
-        Document peteDocument = new Document('_id', pete.id)
-                .append('name', pete.name)
-                .append('jobTitle', pete.jobTitle)
-                .append('dateStarted', pete.dateStarted)
-                .append('numberOfJobs', pete.numberOfJobs)
-
-        Document samDocument = new Document('_id', sam.id)
-                .append('name', sam.name)
-                .append('jobTitle', sam.jobTitle)
-                .append('dateStarted', sam.dateStarted)
-                .append('numberOfJobs', sam.numberOfJobs)
-
-        getCollectionHelper().insertDocuments(new Document('worker', peteDocument), new Document('worker', samDocument));
-
-        when:
-        DistinctOperation operation = new DistinctOperation(getNamespace(), 'worker', new WorkerCodec())
-        def futureResult = new FutureResultCallback()
-        executeAsync(operation).next(futureResult)
-        def result = futureResult.get(60, SECONDS)
-
-        then:
-        result == [pete, sam]
-    }
 
     def 'should throw if invalid decoder passed to distinct'() {
         given:
@@ -227,249 +174,196 @@ class DistinctOperationSpecification extends OperationFunctionalSpecification {
         Document sam = new Document('name', 1)
         Document pete2 = new Document('name', new Document('earle', 'Jones'))
         getCollectionHelper().insertDocuments(new DocumentCodec(), pete, sam, pete2)
+        DistinctOperation operation = new DistinctOperation(getNamespace(), 'name', stringDecoder)
 
         when:
-        DistinctOperation operation = new DistinctOperation(getNamespace(), 'name', stringDecoder)
-        operation.execute(getBinding()).next();
+        execute(operation, async)
 
         then:
         thrown(BsonInvalidOperationException)
+
+        where:
+        async << [true, false]
     }
 
-    @Category(Async)
-    def 'should throw if invalid decoder passed to distinct asynchronously'() {
-        given:
-        Document pete = new Document('name', 'Pete')
-        Document sam = new Document('name', 1)
-        Document pete2 = new Document('name', new Document('earle', 'Jones'))
-        getCollectionHelper().insertDocuments(new DocumentCodec(), pete, sam, pete2)
-
-        when:
-        DistinctOperation operation = new DistinctOperation(getNamespace(), 'name', stringDecoder)
-        def futureResult = new FutureResultCallback()
-        executeAsync(operation).next(futureResult)
-        futureResult.get(5, SECONDS)
-
-        then:
-        thrown(BsonInvalidOperationException)
-    }
-
-    @IgnoreIf({ !serverVersionAtLeast(asList(2, 6, 0)) })
     def 'should throw execution timeout exception from execute'() {
         given:
         def operation = new DistinctOperation(getNamespace(), 'name', stringDecoder).maxTime(1, SECONDS)
         enableMaxTimeFailPoint()
 
         when:
-        operation.execute(getBinding())
+        execute(operation, async)
 
         then:
         thrown(MongoExecutionTimeoutException)
 
         cleanup:
         disableMaxTimeFailPoint()
-    }
 
-    @Category(Async)
-    @IgnoreIf({ !serverVersionAtLeast(asList(2, 6, 0)) })
-    def 'should throw execution timeout exception from executeAsync'() {
-        given:
-        def operation = new DistinctOperation(getNamespace(), 'name', stringDecoder).maxTime(1, SECONDS)
-        enableMaxTimeFailPoint()
-
-        when:
-        executeAsync(operation)
-
-        then:
-        thrown(MongoExecutionTimeoutException)
-
-        cleanup:
-        disableMaxTimeFailPoint()
+        where:
+        async << [true, false]
     }
 
     def 'should use the ReadBindings readPreference to set slaveOK'() {
-        given:
-        def connection = Mock(Connection) {
-            _ * getDescription() >> helper.connectionDescription
-        }
-        def readBinding = Stub(ReadBinding) {
-            getReadConnectionSource() >> Stub(ConnectionSource) {
-                getConnection() >> connection
-            }
-            getReadPreference() >> readPreference
-        }
+        when:
         def operation = new DistinctOperation(helper.namespace, 'name', helper.decoder)
 
-        when:
-        operation.execute(readBinding)
-
         then:
-        1 * connection.command(helper.dbName, _, readPreference.isSlaveOk(), _, _) >> helper.commandResult
-        1 * connection.release()
+        testOperationSlaveOk(operation, [3, 4, 0], readPreference, async, helper.commandResult)
 
         where:
-        readPreference << [ReadPreference.primary(), ReadPreference.secondary()]
-    }
-
-    def 'should use the AsyncReadBindings readPreference to set slaveOK'() {
-        given:
-        def connection = Mock(AsyncConnection) {
-            _ * getDescription() >> helper.connectionDescription
-        }
-        def connectionSource = Stub(AsyncConnectionSource) {
-            getConnection(_) >> { it[0].onResult(connection, null) }
-        }
-        def readBinding = Stub(AsyncReadBinding) {
-            getReadPreference() >> readPreference
-            getReadConnectionSource(_) >> { it[0].onResult(connectionSource, null) }
-        }
-        def operation = new DistinctOperation(helper.namespace, 'name', helper.decoder)
-
-        when:
-        operation.executeAsync(readBinding, Stub(SingleResultCallback))
-
-        then:
-        1 * connection.commandAsync(helper.dbName, _, readPreference.isSlaveOk(), _, _, _) >> { it[5].onResult(helper.commandResult, null) }
-        1 * connection.release()
-
-        where:
-        readPreference << [ReadPreference.primary(), ReadPreference.secondary()]
+        [async, readPreference] << [[true, false], [ReadPreference.primary(), ReadPreference.secondary()]].combinations()
     }
 
     def 'should create the expected command'() {
-        given:
-        def connection = Mock(Connection) {
-            _ * getDescription() >> Stub(ConnectionDescription) {
-                getServerVersion() >> new ServerVersion([3, 2, 0])
-            }
-        }
-        def connectionSource = Stub(ConnectionSource) {
-            getConnection() >> connection
-        }
-        def readBinding = Stub(ReadBinding) {
-            getReadConnectionSource() >> connectionSource
-        }
-        def operation = new DistinctOperation(helper.namespace, 'name', helper.decoder)
+        when:
+        def operation = new DistinctOperation(helper.namespace, 'name', new BsonDocumentCodec())
+                .filter(new BsonDocument('a', BsonBoolean.TRUE))
+                .maxTime(10, MILLISECONDS)
+                .collation(defaultCollation)
+
         def expectedCommand = new BsonDocument('distinct', new BsonString(helper.namespace.getCollectionName()))
                 .append('key', new BsonString('name'))
-
-        when:
-        operation.execute(readBinding)
-
-        then:
-        1 * connection.command(helper.dbName, expectedCommand, _, _, _) >> {  helper.commandResult }
-        1 * connection.release()
-
-        when:
-        operation.filter(new BsonDocument('a', BsonBoolean.TRUE))
-                .maxTime(10, MILLISECONDS)
-                .readConcern(ReadConcern.MAJORITY)
-
-        expectedCommand.append('filter', operation.getFilter())
+                .append('query', operation.getFilter())
                 .append('maxTimeMS', new BsonInt64(operation.getMaxTime(MILLISECONDS)))
-                .append('readConcern', new BsonDocument('level', new BsonString('majority')))
-
-        operation.execute(readBinding)
+                .append('collation', defaultCollation.asDocument())
 
         then:
-        1 * connection.command(helper.dbName, _, _, _, _) >> { helper.commandResult }
-        1 * connection.release()
+        testOperation(operation, [3, 4, 0], expectedCommand, async, helper.commandResult)
+
+        where:
+        async << [false, false]
     }
 
-    def 'should create the expected command asynchronously'() {
+
+    def 'should throw an exception when using an unsupported ReadConcern'() {
         given:
-        def connection = Mock(AsyncConnection) {
-            _ * getDescription() >> Stub(ConnectionDescription) {
-                getServerVersion() >> new ServerVersion([3, 2, 0])
-            }
-        }
-        def connectionSource = Stub(AsyncConnectionSource) {
-            getConnection(_) >> { it[0].onResult(connection, null) }
-        }
-        def readBinding = Stub(AsyncReadBinding) {
-            getReadConnectionSource(_) >> { it[0].onResult(connectionSource, null) }
-        }
         def operation = new DistinctOperation(helper.namespace, 'name', helper.decoder)
-        def expectedCommand = new BsonDocument('distinct', new BsonString(helper.namespace.getCollectionName()))
-                .append('key', new BsonString('name'))
 
         when:
-        operation.executeAsync(readBinding, Stub(SingleResultCallback))
+        testOperationThrows(operation, [3, 0, 0], readConcern, async)
 
         then:
-        1 * connection.commandAsync(helper.dbName, expectedCommand, _, _, _, _) >> { it[5].onResult(helper.commandResult, null) }
-        1 * connection.release()
+        def exception = thrown(IllegalArgumentException)
+        exception.getMessage().startsWith('ReadConcern not supported by server version:')
 
-        when:
-        operation.filter(new BsonDocument('a', BsonBoolean.TRUE))
-                .maxTime(10, MILLISECONDS)
-                .readConcern(ReadConcern.MAJORITY)
-
-        expectedCommand.append('filter', operation.getFilter())
-                .append('maxTimeMS', new BsonInt64(operation.getMaxTime(MILLISECONDS)))
-                .append('readConcern', new BsonDocument('level', new BsonString('majority')))
-
-        operation.executeAsync(readBinding, Stub(SingleResultCallback))
-
-        then:
-        1 * connection.commandAsync(helper.dbName, _, _, _, _, _) >> { it[5].onResult(helper.commandResult, null) }
-        1 * connection.release()
+        where:
+        [async, readConcern] << [[true, false], [ReadConcern.MAJORITY, ReadConcern.LOCAL]].combinations()
     }
 
-    def 'should validate the ReadConcern'() {
+    def 'should throw an exception when using an unsupported Collation'() {
+        def operation = new DistinctOperation(helper.namespace, 'name', helper.decoder)
+                .collation(defaultCollation)
+
+        when:
+        testOperationThrows(operation, [3, 2, 0], async)
+
+        then:
+        def exception = thrown(IllegalArgumentException)
+        exception.getMessage().startsWith('Collation not supported by server version:')
+
+        where:
+        async << [false, false]
+    }
+
+    @IgnoreIf({ !serverVersionAtLeast(3, 4) })
+    def 'should support collation'() {
         given:
-        def readBinding = Stub(ReadBinding) {
-            getReadConnectionSource() >> Stub(ConnectionSource) {
-                getConnection() >> Stub(Connection) {
-                    getDescription() >> Stub(ConnectionDescription) {
-                        getServerVersion() >> new ServerVersion([3, 0, 0])
-                    }
+        def document = Document.parse('{str: "foo"}')
+        getCollectionHelper().insertDocuments(document)
+        def operation = new DistinctOperation(namespace, 'str', stringDecoder).filter(BsonDocument.parse('{str: "FOO"}}'))
+                .collation(caseInsensitiveCollation)
+
+        when:
+        def result = executeAndCollectBatchCursorResults(operation, async)
+
+        then:
+        result == ['foo']
+
+        where:
+        async << [true, false]
+    }
+
+    def 'should add read concern to command'() {
+        given:
+        def binding = Stub(ReadBinding)
+        def source = Stub(ConnectionSource)
+        def connection = Mock(Connection)
+        binding.readPreference >> ReadPreference.primary()
+        binding.readConnectionSource >> source
+        binding.sessionContext >> sessionContext
+        source.connection >> connection
+        source.retain() >> source
+        def commandDocument = new BsonDocument('distinct', new BsonString(getCollectionName()))
+                .append('key', new BsonString('str'))
+        appendReadConcernToCommand(sessionContext, commandDocument)
+
+        def operation = new DistinctOperation<String>(getNamespace(), 'str', new StringCodec())
+
+        when:
+        operation.execute(binding)
+
+        then:
+        _ * connection.description >> new ConnectionDescription(new ConnectionId(new ServerId(new ClusterId(), new ServerAddress())),
+                new ServerVersion(3, 6), 6, STANDALONE, 1000, 100000, 100000, [])
+        1 * connection.command(_, commandDocument, _, _, _, sessionContext) >>
+                new BsonDocument('values', new BsonArrayWrapper([]))
+        1 * connection.release()
+
+        where:
+        sessionContext << [
+                Stub(SessionContext) {
+                    isCausallyConsistent() >> true
+                    getOperationTime() >> new BsonTimestamp(42, 0)
+                    hasActiveTransaction() >> false
+                    getReadConcern() >> ReadConcern.MAJORITY
                 }
-            }
-        }
-        def operation = new DistinctOperation(helper.namespace, 'name', helper.decoder).readConcern(readConcern)
-
-        when:
-        operation.execute(readBinding)
-
-        then:
-        thrown(IllegalArgumentException)
-
-        where:
-        readConcern << [ReadConcern.MAJORITY, ReadConcern.LOCAL]
+        ]
     }
 
-    def 'should validate the ReadConcern asynchronously'() {
+    def 'should add read concern to command asynchronously'() {
         given:
-        def connection = Stub(AsyncConnection) {
-            getDescription() >>  Stub(ConnectionDescription) {
-                getServerVersion() >> new ServerVersion([3, 0, 0])
-            }
-        }
-        def connectionSource = Stub(AsyncConnectionSource) {
-            getConnection(_) >> { it[0].onResult(connection, null) }
-        }
-        def readBinding = Stub(AsyncReadBinding) {
-            getReadConnectionSource(_) >> { it[0].onResult(connectionSource, null) }
-        }
-        def operation = new DistinctOperation(helper.namespace, 'name', helper.decoder).readConcern(readConcern)
-        def callback = Mock(SingleResultCallback)
+        def binding = Stub(AsyncReadBinding)
+        def source = Stub(AsyncConnectionSource)
+        def connection = Mock(AsyncConnection)
+        binding.readPreference >> ReadPreference.primary()
+        binding.getReadConnectionSource(_) >> { it[0].onResult(source, null) }
+        binding.sessionContext >> sessionContext
+        source.getConnection(_) >> { it[0].onResult(connection, null) }
+        source.retain() >> source
+        def commandDocument = new BsonDocument('distinct', new BsonString(getCollectionName()))
+                .append('key', new BsonString('str'))
+        appendReadConcernToCommand(sessionContext, commandDocument)
+
+        def operation = new DistinctOperation<String>(getNamespace(), 'str', new StringCodec())
 
         when:
-        operation.executeAsync(readBinding, callback)
+        executeAsync(operation, binding)
 
         then:
-        1 * callback.onResult(null, _ as IllegalArgumentException)
+        _ * connection.description >> new ConnectionDescription(new ConnectionId(new ServerId(new ClusterId(), new ServerAddress())),
+                new ServerVersion(3, 6), 6, STANDALONE, 1000, 100000, 100000, [])
+        1 * connection.commandAsync(_, commandDocument, _, _, _, sessionContext, _) >> {
+            it[6].onResult(new BsonDocument('values', new BsonArrayWrapper([])), null)
+        }
+        1 * connection.release()
 
         where:
-        readConcern << [ReadConcern.MAJORITY, ReadConcern.LOCAL]
+        sessionContext << [
+                Stub(SessionContext) {
+                    isCausallyConsistent() >> true
+                    getOperationTime() >> new BsonTimestamp(42, 0)
+                    hasActiveTransaction() >> false
+                    getReadConcern() >> ReadConcern.MAJORITY
+                }
+        ]
     }
+
 
     def helper = [
         dbName: 'db',
         namespace: new MongoNamespace('db', 'coll'),
         decoder: Stub(Decoder),
-        commandResult: BsonDocument.parse('{ok: 1.0}').append('values', new BsonArrayWrapper([])),
-        connectionDescription: Stub(ConnectionDescription)
+        commandResult: BsonDocument.parse('{ok: 1.0}').append('values', new BsonArrayWrapper([]))
     ]
 }

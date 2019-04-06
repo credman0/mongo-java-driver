@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 
 /**
- * The QuickTour code example see: https://mongodb.github.io/mongo-java-driver/3.0/getting-started
+ * The QuickTour code example
  */
 public class QuickTour {
     /**
@@ -123,7 +123,7 @@ public class QuickTour {
         collection.insertMany(documents, new SingleResultCallback<Void>() {
             @Override
             public void onResult(final Void result, final Throwable t) {
-                collection.count(new SingleResultCallback<Long>() {
+                collection.countDocuments(new SingleResultCallback<Long>() {
                     @Override
                     public void onResult(final Long count, final Throwable t) {
                         System.out.println("total # of documents after inserting 100 small ones (should be 101) " + count);
@@ -251,7 +251,7 @@ public class QuickTour {
                 dropLatch3.countDown();
             }
         });
-        dropLatch2.await();
+        dropLatch3.await();
 
         collection.bulkWrite(writes, new BulkWriteOptions().ordered(false), printBatchResult);
         collection.find().forEach(printDocumentBlock, callbackWhenFinished);

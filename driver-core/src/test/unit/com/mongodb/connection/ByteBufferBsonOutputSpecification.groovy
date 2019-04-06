@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package com.mongodb.connection
 
 import category.Slow
+import com.mongodb.internal.connection.SimpleBufferProvider
 import org.bson.BsonSerializationException
 import org.bson.types.ObjectId
 import org.junit.experimental.categories.Category
@@ -210,6 +211,17 @@ class ByteBufferBsonOutputSpecification extends Specification {
         getBytes(bsonOutput) == [0xe0, 0xa4, 0x80, 0] as byte[]
         bsonOutput.position == 4
         bsonOutput.size == 4
+    }
+
+    def 'should get byte buffers as little endian'() {
+        given:
+        def bsonOutput = new ByteBufferBsonOutput(new SimpleBufferProvider())
+
+        when:
+        bsonOutput.writeBytes([1, 0, 0, 0] as byte[])
+
+        then:
+        bsonOutput.getByteBuffers()[0].getInt() == 1
     }
 
     def 'null character in CString should throw SerializationException'() {

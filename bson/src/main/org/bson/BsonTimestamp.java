@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 package org.bson;
 
+import org.bson.internal.UnsignedLongs;
+
 /**
  * A value representing the BSON timestamp type.
  *
@@ -23,31 +25,49 @@ package org.bson;
  */
 public final class BsonTimestamp extends BsonValue implements Comparable<BsonTimestamp> {
 
-    private final int seconds;
-    private final int inc;
+    private final long value;
 
     /**
      * Construct a new instance with a null time and a 0 increment.
      */
     public BsonTimestamp() {
-        seconds = 0;
-        inc = 0;
+        value = 0;
+    }
+
+    /**
+     * Construct a new instance for the given value, which combines the time in seconds and the increment as a single long value.
+     *
+     * @param value the timetamp as a single long value
+     * @since 3.5
+     */
+    public BsonTimestamp(final long value) {
+        this.value = value;
     }
 
     /**
      * Construct a new instance for the given time and increment.
      *
      * @param seconds the number of seconds since the epoch
-     * @param inc  the increment.
+     * @param increment  the increment.
      */
-    public BsonTimestamp(final int seconds, final int inc) {
-        this.seconds = seconds;
-        this.inc = inc;
+    public BsonTimestamp(final int seconds, final int increment) {
+        value = ((long) seconds << 32) | (increment & 0xFFFFFFFFL);
     }
 
     @Override
     public BsonType getBsonType() {
         return BsonType.TIMESTAMP;
+    }
+
+
+    /**
+     * Gets the value of the timestamp.
+     *
+     * @return the timestamp value
+     * @since 3.5
+     */
+    public long getValue() {
+        return value;
     }
 
     /**
@@ -56,7 +76,7 @@ public final class BsonTimestamp extends BsonValue implements Comparable<BsonTim
      * @return an int representing time in seconds since epoch
      */
     public int getTime() {
-       return seconds;
+       return (int) (value >> 32);
     }
 
     /**
@@ -65,24 +85,21 @@ public final class BsonTimestamp extends BsonValue implements Comparable<BsonTim
      * @return an incrementing ordinal for operations within a given second
      */
     public int getInc() {
-        return inc;
+        return (int) value;
     }
 
     @Override
     public String toString() {
         return "Timestamp{"
-               + "seconds=" + seconds
-               + ", inc=" + inc
+               + "value=" + getValue()
+               + ", seconds=" + getTime()
+               + ", inc=" + getInc()
                + '}';
     }
 
     @Override
     public int compareTo(final BsonTimestamp ts) {
-        if (getTime() != ts.getTime()) {
-            return getTime() - ts.getTime();
-        } else {
-            return getInc() - ts.getInc();
-        }
+        return UnsignedLongs.compare(value, ts.value);
     }
 
     @Override
@@ -96,11 +113,7 @@ public final class BsonTimestamp extends BsonValue implements Comparable<BsonTim
 
         BsonTimestamp timestamp = (BsonTimestamp) o;
 
-        if (seconds != timestamp.seconds) {
-            return false;
-        }
-
-        if (inc != timestamp.inc) {
+        if (value != timestamp.value) {
             return false;
         }
 
@@ -109,8 +122,6 @@ public final class BsonTimestamp extends BsonValue implements Comparable<BsonTim
 
     @Override
     public int hashCode() {
-        int result = seconds;
-        result = 31 * result + inc;
-        return result;
+        return (int) (value ^ (value >>> 32));
     }
 }

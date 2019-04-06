@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,11 @@ public class BsonDocumentReader extends AbstractBsonReader {
     @Override
     protected byte doPeekBinarySubType() {
         return currentValue.asBinary().getType();
+    }
+
+    @Override
+    protected int doPeekBinarySize() {
+        return currentValue.asBinary().getData().length;
     }
 
     @Override
@@ -230,6 +235,7 @@ public class BsonDocumentReader extends AbstractBsonReader {
         return getCurrentBsonType();
     }
 
+    @Deprecated
     @Override
     public void mark() {
         if (mark != null) {
@@ -238,6 +244,12 @@ public class BsonDocumentReader extends AbstractBsonReader {
         mark = new Mark();
     }
 
+    @Override
+    public BsonReaderMark getMark() {
+        return new Mark();
+    }
+
+    @Deprecated
     @Override
     public void reset() {
         if (mark == null) {
@@ -252,8 +264,8 @@ public class BsonDocumentReader extends AbstractBsonReader {
         return (Context) super.getContext();
     }
     protected class Mark extends AbstractBsonReader.Mark {
-        private BsonValue currentValue;
-        private Context context;
+        private final BsonValue currentValue;
+        private final Context context;
 
         protected Mark() {
             super();
@@ -262,7 +274,7 @@ public class BsonDocumentReader extends AbstractBsonReader {
             context.mark();
         }
 
-        protected void reset() {
+        public void reset() {
             super.reset();
             BsonDocumentReader.this.currentValue = currentValue;
             BsonDocumentReader.this.setContext(context);

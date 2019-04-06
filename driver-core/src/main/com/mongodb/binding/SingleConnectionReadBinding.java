@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ package com.mongodb.binding;
 import com.mongodb.ReadPreference;
 import com.mongodb.connection.Connection;
 import com.mongodb.connection.ServerDescription;
+import com.mongodb.internal.connection.NoOpSessionContext;
+import com.mongodb.session.SessionContext;
 
 import static com.mongodb.assertions.Assertions.notNull;
 
@@ -27,6 +29,7 @@ import static com.mongodb.assertions.Assertions.notNull;
  *
  * @since 3.2
  */
+@Deprecated
 public class SingleConnectionReadBinding extends AbstractReferenceCounted implements ReadBinding {
 
     private final ReadPreference readPreference;
@@ -58,6 +61,11 @@ public class SingleConnectionReadBinding extends AbstractReferenceCounted implem
     }
 
     @Override
+    public SessionContext getSessionContext() {
+        return NoOpSessionContext.INSTANCE;
+    }
+
+    @Override
     public ReadBinding retain() {
         super.retain();
         return this;
@@ -73,13 +81,18 @@ public class SingleConnectionReadBinding extends AbstractReferenceCounted implem
 
     private class SingleConnectionSource extends AbstractReferenceCounted implements ConnectionSource {
 
-        public SingleConnectionSource() {
+        SingleConnectionSource() {
             SingleConnectionReadBinding.this.retain();
         }
 
         @Override
         public ServerDescription getServerDescription() {
             return serverDescription;
+        }
+
+        @Override
+        public SessionContext getSessionContext() {
+            return NoOpSessionContext.INSTANCE;
         }
 
         @Override

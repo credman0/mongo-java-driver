@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ import java.util.concurrent.CountDownLatch;
 import static com.mongodb.client.model.Filters.text;
 
 /**
- * The QuickTourAdmin code example see: https://mongodb.github.io/mongo-java-driver/3.0/getting-started
+ * The QuickTourAdmin code example
  */
 public class QuickTourAdmin {
     /**
@@ -131,7 +131,7 @@ public class QuickTourAdmin {
         collection.insertOne(new Document("_id", 2).append("content", "irrelevant content"), callbackWhenFinished);
 
         // Find using the text index
-        collection.count(text("textual content -irrelevant"), new SingleResultCallback<Long>() {
+        collection.countDocuments(text("textual content -irrelevant"), new SingleResultCallback<Long>() {
             @Override
             public void onResult(final Long matchCount, final Throwable t) {
                 System.out.println("Text search matches: " + matchCount);
@@ -141,7 +141,7 @@ public class QuickTourAdmin {
 
         // Find using the $language operator
         Bson textSearch = text("textual content -irrelevant", new TextSearchOptions().language("english"));
-        collection.count(textSearch, new SingleResultCallback<Long>() {
+        collection.countDocuments(textSearch, new SingleResultCallback<Long>() {
             @Override
             public void onResult(final Long matchCount, final Throwable t) {
                 System.out.println("Text search matches (english): " + matchCount);

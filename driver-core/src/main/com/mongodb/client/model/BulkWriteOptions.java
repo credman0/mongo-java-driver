@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 package com.mongodb.client.model;
+
+import com.mongodb.lang.Nullable;
 
 /**
  * The options to apply to a bulk write.
@@ -56,6 +58,7 @@ public final class BulkWriteOptions {
      * @since 3.2
      * @mongodb.server.release 3.2
      */
+    @Nullable
     public Boolean getBypassDocumentValidation() {
         return bypassDocumentValidation;
     }
@@ -68,8 +71,16 @@ public final class BulkWriteOptions {
      * @since 3.2
      * @mongodb.server.release 3.2
      */
-    public BulkWriteOptions bypassDocumentValidation(final Boolean bypassDocumentValidation) {
+    public BulkWriteOptions bypassDocumentValidation(@Nullable final Boolean bypassDocumentValidation) {
         this.bypassDocumentValidation = bypassDocumentValidation;
         return this;
+    }
+
+    @Override
+    public String toString() {
+        return "BulkWriteOptions{"
+                + "ordered=" + ordered
+                + ", bypassDocumentValidation=" + bypassDocumentValidation
+                + '}';
     }
 }

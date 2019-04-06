@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommand
  * @param <T> the operations result type.
  * @since 3.0
  */
+@Deprecated
 public class CommandWriteOperation<T> implements AsyncWriteOperation<T>, WriteOperation<T> {
     private final String databaseName;
     private final BsonDocument command;

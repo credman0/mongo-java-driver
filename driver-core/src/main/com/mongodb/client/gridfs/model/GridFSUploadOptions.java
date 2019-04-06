@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,7 @@
 
 package com.mongodb.client.gridfs.model;
 
+import com.mongodb.lang.Nullable;
 import org.bson.Document;
 
 /**
@@ -42,6 +43,7 @@ public final class GridFSUploadOptions {
      *
      * @return number of bytes per chunk if set or null
      */
+    @Nullable
     public Integer getChunkSizeBytes() {
         return chunkSizeBytes;
     }
@@ -52,7 +54,7 @@ public final class GridFSUploadOptions {
      * @param chunkSizeBytes the number of bytes per chunk for the uploaded file
      * @return this
      */
-    public GridFSUploadOptions chunkSizeBytes(final Integer chunkSizeBytes) {
+    public GridFSUploadOptions chunkSizeBytes(@Nullable final Integer chunkSizeBytes) {
         this.chunkSizeBytes = chunkSizeBytes;
         return this;
     }
@@ -62,6 +64,7 @@ public final class GridFSUploadOptions {
      *
      * @return the user provided metadata for the file if set or null
      */
+    @Nullable
     public Document getMetadata() {
         return metadata;
     }
@@ -72,7 +75,7 @@ public final class GridFSUploadOptions {
      * @param metadata the metadata to be stored
      * @return this
      */
-    public GridFSUploadOptions metadata(final Document metadata) {
+    public GridFSUploadOptions metadata(@Nullable final Document metadata) {
         this.metadata = metadata;
         return this;
     }

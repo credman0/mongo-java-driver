@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,11 @@
 package com.mongodb
 
 import com.mongodb.bulk.IndexRequest
+import com.mongodb.client.model.Collation
+import com.mongodb.client.model.CollationAlternate
+import com.mongodb.client.model.CollationCaseFirst
+import com.mongodb.client.model.CollationMaxVariable
+import com.mongodb.client.model.CollationStrength
 import org.bson.BsonDocument
 import org.bson.BsonInt32
 import spock.lang.Specification
@@ -49,12 +54,25 @@ class IndexRequestSpecification extends Specification {
         !request.getDropDups()
         request.getStorageEngine() == null
         request.getPartialFilterExpression() == null
+        request.getCollation() == null
+        request.getWildcardProjection() == null
 
         when:
         def keys = BsonDocument.parse('{ a: 1 }')
         def weights = BsonDocument.parse('{ a: 1000 }')
         def storageEngine = BsonDocument.parse('{ wiredTiger : { configString : "block_compressor=zlib" }}')
         def partialFilterExpression = BsonDocument.parse('{ a: { $gte: 10 } }')
+        def collation = Collation.builder()
+                .locale('en')
+                .caseLevel(true)
+                .collationCaseFirst(CollationCaseFirst.OFF)
+                .collationStrength(CollationStrength.IDENTICAL)
+                .numericOrdering(true)
+                .collationAlternate(CollationAlternate.SHIFTED)
+                .collationMaxVariable(CollationMaxVariable.SPACE)
+                .backwards(true)
+                .build()
+        def wildcardProjection = BsonDocument.parse('{a  : 1}')
         def request2 = new IndexRequest(keys)
                 .background(true)
                 .unique(true)
@@ -74,6 +92,8 @@ class IndexRequestSpecification extends Specification {
                 .dropDups(true)
                 .storageEngine(storageEngine)
                 .partialFilterExpression(partialFilterExpression)
+                .collation(collation)
+                .wildcardProjection(wildcardProjection)
 
         then:
         request2.getKeys() == keys
@@ -95,6 +115,8 @@ class IndexRequestSpecification extends Specification {
         request2.getDropDups()
         request2.getStorageEngine() == storageEngine
         request2.getPartialFilterExpression() == partialFilterExpression
+        request2.getCollation() == collation
+        request2.getWildcardProjection() == wildcardProjection
     }
 
 
@@ -146,6 +168,12 @@ class IndexRequestSpecification extends Specification {
 
         when:
         options.sphereVersion(3)
+
+        then:
+        notThrown(IllegalArgumentException)
+
+        when:
+        options.sphereVersion(4)
 
         then:
         thrown(IllegalArgumentException)

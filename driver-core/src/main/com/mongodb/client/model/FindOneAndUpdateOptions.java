@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,10 @@
 
 package com.mongodb.client.model;
 
+import com.mongodb.lang.Nullable;
 import org.bson.conversions.Bson;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static com.mongodb.assertions.Assertions.notNull;
@@ -36,13 +38,16 @@ public class FindOneAndUpdateOptions {
     private ReturnDocument returnDocument = ReturnDocument.BEFORE;
     private long maxTimeMS;
     private Boolean bypassDocumentValidation;
+    private Collation collation;
+    private List<? extends Bson> arrayFilters;
 
-     /**
+    /**
      * Gets a document describing the fields to return for all matching documents.
      *
      * @return the project document, which may be null
      * @mongodb.driver.manual tutorial/project-fields-from-query-results Projection
      */
+    @Nullable
     public Bson getProjection() {
         return projection;
     }
@@ -54,7 +59,7 @@ public class FindOneAndUpdateOptions {
      * @return this
      * @mongodb.driver.manual tutorial/project-fields-from-query-results Projection
      */
-    public FindOneAndUpdateOptions projection(final Bson projection) {
+    public FindOneAndUpdateOptions projection(@Nullable final Bson projection) {
         this.projection = projection;
         return this;
     }
@@ -66,6 +71,7 @@ public class FindOneAndUpdateOptions {
      * @return a document describing the sort criteria
      * @mongodb.driver.manual reference/method/cursor.sort/ Sort
      */
+    @Nullable
     public Bson getSort() {
         return sort;
     }
@@ -77,7 +83,7 @@ public class FindOneAndUpdateOptions {
      * @return this
      * @mongodb.driver.manual reference/method/cursor.sort/ Sort
      */
-    public FindOneAndUpdateOptions sort(final Bson sort) {
+    public FindOneAndUpdateOptions sort(@Nullable final Bson sort) {
         this.sort = sort;
         return this;
     }
@@ -119,7 +125,7 @@ public class FindOneAndUpdateOptions {
      * @return this
      */
     public FindOneAndUpdateOptions returnDocument(final ReturnDocument returnDocument) {
-        this.returnDocument = returnDocument;
+        this.returnDocument = notNull("returnDocument", returnDocument);
         return this;
     }
 
@@ -153,6 +159,7 @@ public class FindOneAndUpdateOptions {
      * @since 3.2
      * @mongodb.server.release 3.2
      */
+    @Nullable
     public Boolean getBypassDocumentValidation() {
         return bypassDocumentValidation;
     }
@@ -165,8 +172,72 @@ public class FindOneAndUpdateOptions {
      * @since 3.2
      * @mongodb.server.release 3.2
      */
-    public FindOneAndUpdateOptions bypassDocumentValidation(final Boolean bypassDocumentValidation) {
+    public FindOneAndUpdateOptions bypassDocumentValidation(@Nullable final Boolean bypassDocumentValidation) {
         this.bypassDocumentValidation = bypassDocumentValidation;
         return this;
+    }
+
+    /**
+     * Returns the collation options
+     *
+     * @return the collation options
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    @Nullable
+    public Collation getCollation() {
+        return collation;
+    }
+
+    /**
+     * Sets the collation options
+     *
+     * <p>A null value represents the server default.</p>
+     * @param collation the collation options to use
+     * @return this
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public FindOneAndUpdateOptions collation(@Nullable final Collation collation) {
+        this.collation = collation;
+        return this;
+    }
+    /**
+     * Sets the array filters option
+     *
+     * @param arrayFilters the array filters, which may be null
+     * @return this
+     * @since 3.6
+     * @mongodb.server.release 3.6
+     */
+    public FindOneAndUpdateOptions arrayFilters(@Nullable final List<? extends Bson> arrayFilters) {
+        this.arrayFilters = arrayFilters;
+        return this;
+    }
+
+    /**
+     * Returns the array filters option
+     *
+     * @return the array filters, which may be null
+     * @since 3.6
+     * @mongodb.server.release 3.6
+     */
+    @Nullable
+    public List<? extends Bson> getArrayFilters() {
+        return arrayFilters;
+    }
+
+    @Override
+    public String toString() {
+        return "FindOneAndUpdateOptions{"
+                + "projection=" + projection
+                + ", sort=" + sort
+                + ", upsert=" + upsert
+                + ", returnDocument=" + returnDocument
+                + ", maxTimeMS=" + maxTimeMS
+                + ", bypassDocumentValidation=" + bypassDocumentValidation
+                + ", collation=" + collation
+                + ", arrayFilters=" + arrayFilters
+                + '}';
     }
 }

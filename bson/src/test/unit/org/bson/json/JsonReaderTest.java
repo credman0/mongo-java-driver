@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,10 @@ import org.junit.Test;
 import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -145,6 +147,16 @@ public class JsonReaderTest {
     }
 
     @Test
+    public void testNestedDateTimeStrict() {
+        String json = "{d1 : { \"$date\" : 0 }, d2 : { \"$date\" : 1 } }";
+        bsonReader = new JsonReader(json);
+        bsonReader.readStartDocument();
+        assertEquals(0L, bsonReader.readDateTime("d1"));
+        assertEquals(1L, bsonReader.readDateTime("d2"));
+        bsonReader.readEndDocument();
+    }
+
+    @Test
     public void testDateTimeISOString() {
         String json = "{ \"$date\" : \"2015-04-16T14:55:57.626Z\" }";
         bsonReader = new JsonReader(json);
@@ -160,27 +172,6 @@ public class JsonReaderTest {
         assertEquals(BsonType.DATE_TIME, bsonReader.readBsonType());
         assertEquals(1429196157626L, bsonReader.readDateTime());
         assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
-    }
-
-    @Test(expected = JsonParseException.class)
-    public void testInvalidDateTimeISOString1() {
-        String json = "{ \"$date\" : \"2015-04-16T16:55:57.626+02:0000\" }";
-        bsonReader = new JsonReader(json);
-        bsonReader.readBsonType();
-    }
-
-    @Test(expected = JsonParseException.class)
-    public void testInvalidDateTimeISOString2() {
-        String json = "{ \"$date\" : \"2015-04-16T16:55:57.626Z invalid string\" }";
-        bsonReader = new JsonReader(json);
-        bsonReader.readBsonType();
-    }
-
-    @Test(expected = JsonParseException.class)
-    public void testInvalidDateTimeValue() {
-        String json = "{ \"$date\" : {} }";
-        bsonReader = new JsonReader(json);
-        bsonReader.readBsonType();
     }
 
     @Test
@@ -271,7 +262,6 @@ public class JsonReaderTest {
         bsonReader = new JsonReader(json);
         assertEquals(BsonType.BINARY, bsonReader.readBsonType());
         BsonBinary binary = bsonReader.readBinaryData();
-        byte[] bytes = binary.getData();
         assertArrayEquals(expectedBytes, binary.getData());
         assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
     }
@@ -283,7 +273,6 @@ public class JsonReaderTest {
         bsonReader = new JsonReader(json);
         assertEquals(BsonType.BINARY, bsonReader.readBsonType());
         BsonBinary binary = bsonReader.readBinaryData();
-        byte[] bytes = binary.getData();
         assertArrayEquals(expectedBytes, binary.getData());
         assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
     }
@@ -308,15 +297,6 @@ public class JsonReaderTest {
     }
 
     @Test
-    public void testNumberLong() {
-        String json = "NumberLong(123)";
-        bsonReader = new JsonReader(json);
-        assertEquals(BsonType.INT64, bsonReader.readBsonType());
-        assertEquals(123, bsonReader.readInt64());
-        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
-    }
-
-    @Test
     public void testNumberLongExtendedJson() {
         String json = "{\"$numberLong\":\"123\"}";
         bsonReader = new JsonReader(json);
@@ -326,12 +306,33 @@ public class JsonReaderTest {
     }
 
     @Test
-    public void testNumberLongWithNew() {
-        String json = "new NumberLong(123)";
-        bsonReader = new JsonReader(json);
-        assertEquals(BsonType.INT64, bsonReader.readBsonType());
-        assertEquals(123, bsonReader.readInt64());
-        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    public void testNumberLong() {
+        List<String> jsonTexts = asList(
+                "NumberLong(123)",
+                "NumberLong(\"123\")",
+                "new NumberLong(123)",
+                "new NumberLong(\"123\")");
+        for (String json : jsonTexts) {
+            bsonReader = new JsonReader(json);
+            assertEquals(BsonType.INT64, bsonReader.readBsonType());
+            assertEquals(123, bsonReader.readInt64());
+            assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+        }
+    }
+
+    @Test
+    public void testNumberInt() {
+        List<String> jsonTexts = asList(
+                "NumberInt(123)",
+                "NumberInt(\"123\")",
+                "new NumberInt(123)",
+                "new NumberInt(\"123\")");
+        for (String json : jsonTexts) {
+            bsonReader = new JsonReader(json);
+            assertEquals(BsonType.INT32, bsonReader.readBsonType());
+            assertEquals(123, bsonReader.readInt32());
+            assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+        }
     }
 
     @Test
@@ -401,18 +402,6 @@ public class JsonReaderTest {
     }
 
     @Test
-    public void testDecimal128ExtendedJsonWithBoolean() {
-        String json = "{\"$numberDecimal\": true}";
-        bsonReader = new JsonReader(json);
-        try {
-            bsonReader.readBsonType();
-            fail("Should fail to parse NumberDecimal constructor with a string");
-        } catch (JsonParseException e) {
-            // all good
-        }
-    }
-
-    @Test
     public void testJavaScript() {
         String json = "{ \"$code\" : \"function f() { return 1; }\" }";
         bsonReader = new JsonReader(json);
@@ -441,22 +430,30 @@ public class JsonReaderTest {
 
     @Test
     public void testMaxKey() {
-        String json = "{ \"$maxKey\" : 1 }";
-        bsonReader = new JsonReader(json);
-        assertEquals(BsonType.MAX_KEY, bsonReader.readBsonType());
-        bsonReader.readMaxKey();
-        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
-
+        for (String maxKeyJson : asList("{ \"$maxKey\" : 1 }", "MaxKey", "MaxKey()", "new MaxKey", "new MaxKey()")) {
+            String json = "{ maxKey : " + maxKeyJson + " }";
+            bsonReader = new JsonReader(json);
+            bsonReader.readStartDocument();
+            assertEquals("maxKey", bsonReader.readName());
+            assertEquals(BsonType.MAX_KEY, bsonReader.getCurrentBsonType());
+            bsonReader.readMaxKey();
+            bsonReader.readEndDocument();
+            assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+        }
     }
 
     @Test
     public void testMinKey() {
-        String json = "{ \"$minKey\" : 1 }";
-        bsonReader = new JsonReader(json);
-        assertEquals(BsonType.MIN_KEY, bsonReader.readBsonType());
-        bsonReader.readMinKey();
-        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
-
+        for (String minKeyJson : asList("{ \"$minKey\" : 1 }", "MinKey", "MinKey()", "new MinKey", "new MinKey()")) {
+            String json = "{ minKey : " + minKeyJson + " }";
+            bsonReader = new JsonReader(json);
+            bsonReader.readStartDocument();
+            assertEquals("minKey", bsonReader.readName());
+            assertEquals(BsonType.MIN_KEY, bsonReader.getCurrentBsonType());
+            bsonReader.readMinKey();
+            bsonReader.readEndDocument();
+            assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+        }
     }
 
     @Test
@@ -552,7 +549,7 @@ public class JsonReaderTest {
         assertEquals(BsonType.REGULAR_EXPRESSION, bsonReader.readBsonType());
         BsonRegularExpression regex = bsonReader.readRegularExpression();
         assertEquals("pattern", regex.getPattern());
-        assertEquals("imxs", regex.getOptions());
+        assertEquals("imsx", regex.getOptions());
         assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
 
     }
@@ -564,10 +561,43 @@ public class JsonReaderTest {
         assertEquals(BsonType.REGULAR_EXPRESSION, bsonReader.readBsonType());
         BsonRegularExpression regex = bsonReader.readRegularExpression();
         assertEquals("pattern", regex.getPattern());
-        assertEquals("imxs", regex.getOptions());
+        assertEquals("imsx", regex.getOptions());
         assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
-        JsonWriterSettings settings = new JsonWriterSettings(JsonMode.STRICT);
+    }
 
+    @Test
+    public void testRegularExpressionCanonical() {
+        String json = "{ \"$regularExpression\" : { \"pattern\" : \"pattern\", \"options\" : \"imxs\" }}";
+        bsonReader = new JsonReader(json);
+        assertEquals(BsonType.REGULAR_EXPRESSION, bsonReader.readBsonType());
+        BsonRegularExpression regex = bsonReader.readRegularExpression();
+        assertEquals("pattern", regex.getPattern());
+        assertEquals("imsx", regex.getOptions());
+        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    }
+
+    @Test
+    public void testRegularExpressionQuery() {
+        String json = "{ \"$regex\" : { \"$regularExpression\" : { \"pattern\" : \"pattern\", \"options\" : \"imxs\" }}}";
+        bsonReader = new JsonReader(json);
+        bsonReader.readStartDocument();
+        BsonRegularExpression regex = bsonReader.readRegularExpression("$regex");
+        assertEquals("pattern", regex.getPattern());
+        assertEquals("imsx", regex.getOptions());
+        bsonReader.readEndDocument();
+        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    }
+
+    @Test
+    public void testRegularExpressionQueryShell() {
+        String json = "{ \"$regex\" : /pattern/imxs}";
+        bsonReader = new JsonReader(json);
+        bsonReader.readStartDocument();
+        BsonRegularExpression regex = bsonReader.readRegularExpression("$regex");
+        assertEquals("pattern", regex.getPattern());
+        assertEquals("imsx", regex.getOptions());
+        bsonReader.readEndDocument();
+        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
     }
 
     @Test
@@ -629,6 +659,15 @@ public class JsonReaderTest {
     }
 
     @Test
+    public void testTimestampStrictWithOutOfOrderFields() {
+        String json = "{ \"$timestamp\" : { \"i\" : 1, \"t\" : 1234 } }";
+        bsonReader = new JsonReader(json);
+        assertEquals(BsonType.TIMESTAMP, bsonReader.readBsonType());
+        assertEquals(new BsonTimestamp(1234, 1), bsonReader.readTimestamp());
+        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    }
+
+    @Test
     public void testTimestampShell() {
         String json = "Timestamp(1234, 1)";
         bsonReader = new JsonReader(json);
@@ -654,13 +693,6 @@ public class JsonReaderTest {
         assertEquals(BsonType.UNDEFINED, bsonReader.readBsonType());
         bsonReader.readUndefined();
         assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
-    }
-
-    @Test(expected = JsonParseException.class)
-    public void testUndefinedExtendedInvalid() {
-        String json = "{ \"$undefined\" : false }";
-        bsonReader = new JsonReader(json);
-        bsonReader.readUndefined();
     }
 
     @Test(expected = IllegalStateException.class)
@@ -689,18 +721,29 @@ public class JsonReaderTest {
     }
 
     @Test
-    public void testBinary() {
+    public void testLegacyBinary() {
         String json = "{ \"$binary\" : \"AQID\", \"$type\" : \"0\" }";
         bsonReader = new JsonReader(json);
         assertEquals(BsonType.BINARY, bsonReader.readBsonType());
         BsonBinary binary = bsonReader.readBinaryData();
-        assertEquals(0, binary.getType());
+        assertEquals(BsonBinarySubType.BINARY.getValue(), binary.getType());
         assertArrayEquals(new byte[]{1, 2, 3}, binary.getData());
         assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
     }
 
     @Test
-    public void testUserDefinedBinary() {
+    public void testLegacyBinaryWithNumericType() {
+        String json = "{ \"$binary\" : \"AQID\", \"$type\" : 0 }";
+        bsonReader = new JsonReader(json);
+        assertEquals(BsonType.BINARY, bsonReader.readBsonType());
+        BsonBinary binary = bsonReader.readBinaryData();
+        assertEquals(BsonBinarySubType.BINARY.getValue(), binary.getType());
+        assertArrayEquals(new byte[]{1, 2, 3}, binary.getData());
+        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    }
+
+    @Test
+    public void testLegacyUserDefinedBinary() {
         String json = "{ \"$binary\" : \"AQID\", \"$type\" : \"80\" }";
         bsonReader = new JsonReader(json);
         assertEquals(BsonType.BINARY, bsonReader.readBsonType());
@@ -708,6 +751,57 @@ public class JsonReaderTest {
         assertEquals(BsonBinarySubType.USER_DEFINED.getValue(), binary.getType());
         assertArrayEquals(new byte[]{1, 2, 3}, binary.getData());
         assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    }
+
+    @Test
+    public void testLegacyUserDefinedBinaryWithKeyOrderReversed() {
+        String json = "{ \"$type\" : \"80\", \"$binary\" : \"AQID\" }";
+        bsonReader = new JsonReader(json);
+        assertEquals(BsonType.BINARY, bsonReader.readBsonType());
+        BsonBinary binary = bsonReader.readBinaryData();
+        assertEquals(BsonBinarySubType.USER_DEFINED.getValue(), binary.getType());
+        assertArrayEquals(new byte[]{1, 2, 3}, binary.getData());
+        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    }
+
+    @Test
+    public void testLegacyUserDefinedBinaryWithNumericType() {
+        String json = "{ \"$binary\" : \"AQID\", \"$type\" : 128 }";
+        bsonReader = new JsonReader(json);
+        assertEquals(BsonType.BINARY, bsonReader.readBsonType());
+        BsonBinary binary = bsonReader.readBinaryData();
+        assertEquals(BsonBinarySubType.USER_DEFINED.getValue(), binary.getType());
+        assertArrayEquals(new byte[]{1, 2, 3}, binary.getData());
+        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    }
+
+    @Test
+    public void testCanonicalExtendedJsonBinary() {
+        String json = "{ \"$binary\" : { \"base64\" : \"AQID\", \"subType\" : \"80\" } }";
+        bsonReader = new JsonReader(json);
+        assertEquals(BsonType.BINARY, bsonReader.readBsonType());
+        BsonBinary binary = bsonReader.readBinaryData();
+        assertEquals(BsonBinarySubType.USER_DEFINED.getValue(), binary.getType());
+        assertArrayEquals(new byte[]{1, 2, 3}, binary.getData());
+        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    }
+
+    @Test
+    public void testCanonicalExtendedJsonBinaryWithKeysReversed() {
+        String json = "{ \"$binary\" : { \"subType\" : \"80\", \"base64\" : \"AQID\" } }";
+        bsonReader = new JsonReader(json);
+        assertEquals(BsonType.BINARY, bsonReader.readBsonType());
+        BsonBinary binary = bsonReader.readBinaryData();
+        assertEquals(BsonBinarySubType.USER_DEFINED.getValue(), binary.getType());
+        assertArrayEquals(new byte[]{1, 2, 3}, binary.getData());
+        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    }
+
+    @Test(expected = JsonParseException.class)
+    public void testCanonicalExtendedJsonBinaryWithIncorrectFirstKey() {
+        String json = "{ \"$binary\" : { \"badKey\" : \"80\", \"base64\" : \"AQID\" } }";
+        bsonReader = new JsonReader(json);
+        assertEquals(BsonType.BINARY, bsonReader.readBsonType());
     }
 
     @Test
@@ -765,6 +859,19 @@ public class JsonReaderTest {
         BsonBinary binary = bsonReader.readBinaryData();
         assertEquals(3, binary.getType());
         assertArrayEquals(new byte[]{1, 2, 3}, binary.getData());
+        bsonReader.readEndDocument();
+        assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
+    }
+
+    @Test
+    public void testBinDataQuoted() {
+        String json = "{ \"a\" : BinData(3, \"AQIDBA==\") }";
+        bsonReader = new JsonReader(json);
+        bsonReader.readStartDocument();
+        assertEquals(BsonType.BINARY, bsonReader.readBsonType());
+        BsonBinary binary = bsonReader.readBinaryData();
+        assertEquals(3, binary.getType());
+        assertArrayEquals(new byte[]{1, 2, 3, 4}, binary.getData());
         bsonReader.readEndDocument();
         assertEquals(AbstractBsonReader.State.DONE, bsonReader.getState());
     }

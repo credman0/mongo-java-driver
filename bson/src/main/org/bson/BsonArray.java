@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,10 @@
  */
 
 package org.bson;
+
+import org.bson.codecs.BsonArrayCodec;
+import org.bson.codecs.DecoderContext;
+import org.bson.json.JsonReader;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,14 +42,37 @@ public class BsonArray extends BsonValue implements List<BsonValue>, Cloneable {
      * @param values the list of values, none of whose members may be null.
      */
     public BsonArray(final List<? extends BsonValue> values) {
-        this.values = new ArrayList<BsonValue>(values);
+        this(values, true);
     }
 
     /**
-     * Construct an empty B
+     * Construct an empty BsonArray
      */
     public BsonArray() {
-        values = new ArrayList<BsonValue>();
+        this(new ArrayList<BsonValue>(), false);
+    }
+
+    @SuppressWarnings("unchecked")
+    BsonArray(final List<? extends BsonValue> values, final boolean copy) {
+        if (copy) {
+            this.values = new ArrayList<BsonValue>(values);
+        } else {
+            this.values = (List<BsonValue>) values;
+        }
+    }
+
+    /**
+     * Parses a string in MongoDB Extended JSON format to a {@code BsonArray}
+     *
+     * @param json the JSON string
+     * @return a corresponding {@code BsonArray} object
+     * @see org.bson.json.JsonReader
+     * @mongodb.driver.manual reference/mongodb-extended-json/ MongoDB Extended JSON
+     *
+     * @since 3.4
+     */
+    public static BsonArray parse(final String json) {
+        return new BsonArrayCodec().decode(new JsonReader(json), DecoderContext.builder().build());
     }
 
     /**
@@ -182,17 +209,12 @@ public class BsonArray extends BsonValue implements List<BsonValue>, Cloneable {
         if (this == o) {
             return true;
         }
-        if (o == null || getClass() != o.getClass()) {
+        if (!(o instanceof BsonArray)) {
             return false;
         }
 
         BsonArray that = (BsonArray) o;
-
-        if (!values.equals(that.values)) {
-            return false;
-        }
-
-        return true;
+        return getValues().equals(that.getValues());
     }
 
     @Override

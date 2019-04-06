@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import com.mongodb.MongoNamespace
 import com.mongodb.async.AsyncBatchCursor
 import com.mongodb.async.FutureResultCallback
 import com.mongodb.async.SingleResultCallback
-import com.mongodb.operation.AsyncOperationExecutor
 import com.mongodb.operation.ListIndexesOperation
 import org.bson.Document
 import org.bson.codecs.BsonValueCodecProvider
@@ -50,8 +49,8 @@ class ListIndexesIterableSpecification extends Specification {
                 it[0].onResult(null, null)
             }
         }
-        def executor = new TestOperationExecutor([cursor, cursor]);
-        def listIndexesIterable = new ListIndexesIterableImpl<Document>(namespace, Document, codecRegistry, readPreference, executor)
+        def executor = new TestOperationExecutor([cursor, cursor])
+        def listIndexesIterable = new ListIndexesIterableImpl<Document>(null, namespace, Document, codecRegistry, readPreference, executor)
                 .batchSize(100).maxTime(1000, MILLISECONDS)
 
         when: 'default input should be as expected'
@@ -96,7 +95,7 @@ class ListIndexesIterableSpecification extends Specification {
             }
         }
         def executor = new TestOperationExecutor([cursor(), cursor(), cursor(), cursor(), cursor()]);
-        def mongoIterable = new ListIndexesIterableImpl<Document>(namespace, Document, codecRegistry, readPreference, executor)
+        def mongoIterable = new ListIndexesIterableImpl<Document>(null, namespace, Document, codecRegistry, readPreference, executor)
 
         when:
         def results = new FutureResultCallback()
@@ -158,8 +157,8 @@ class ListIndexesIterableSpecification extends Specification {
 
     def 'should check variables using notNull'() {
         given:
-        def mongoIterable = new ListIndexesIterableImpl<Document>(namespace, Document, codecRegistry, readPreference,
-                Stub(AsyncOperationExecutor))
+        def mongoIterable = new ListIndexesIterableImpl<Document>(null, namespace, Document, codecRegistry, readPreference,
+                Stub(OperationExecutor))
         def callback = Stub(SingleResultCallback)
         def block = Stub(Block)
         def target = Stub(List)
@@ -199,5 +198,21 @@ class ListIndexesIterableSpecification extends Specification {
 
         then:
         thrown(IllegalArgumentException)
+    }
+
+    def 'should get and set batchSize as expected'() {
+        when:
+        def batchSize = 5
+        def mongoIterable = new ListIndexesIterableImpl<Document>(null, namespace, Document, codecRegistry, readPreference,
+                Stub(OperationExecutor))
+
+        then:
+        mongoIterable.getBatchSize() == null
+
+        when:
+        mongoIterable.batchSize(batchSize)
+
+        then:
+        mongoIterable.getBatchSize() == batchSize
     }
 }

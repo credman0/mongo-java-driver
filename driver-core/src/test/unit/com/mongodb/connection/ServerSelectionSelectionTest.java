@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *  http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -64,8 +64,8 @@ public class ServerSelectionSelectionTest {
     public ServerSelectionSelectionTest(final String description, final BsonDocument definition) {
         this.description = description;
         this.definition = definition;
-        this.heartbeatFrequencyMS = definition.getNumber("heartbeatFrequencyMS" , new BsonInt64(10000)).longValue();
-        this.error = definition.getBoolean("error" , BsonBoolean.FALSE).getValue();
+        this.heartbeatFrequencyMS = definition.getNumber("heartbeatFrequencyMS", new BsonInt64(10000)).longValue();
+        this.error = definition.getBoolean("error", BsonBoolean.FALSE).getValue();
         this.clusterDescription = buildClusterDescription(definition.getDocument("topology_description"));
     }
 
@@ -75,7 +75,7 @@ public class ServerSelectionSelectionTest {
         assumeTrue(!description.equals("max-staleness/server_selection/ReplicaSetWithPrimary/MaxStalenessWithModePrimary.json"));
 
         ServerSelector serverSelector = null;
-        List<ServerDescription> suitableServers = buildServerDescriptions(definition.getArray("suitable_servers" , new BsonArray()));
+        List<ServerDescription> suitableServers = buildServerDescriptions(definition.getArray("suitable_servers", new BsonArray()));
         List<ServerDescription> selectedServers = null;
         try {
             serverSelector = getServerSelector();
@@ -149,7 +149,9 @@ public class ServerSelectionSelectionTest {
     private ServerDescription buildServerDescription(final BsonDocument serverDescription) {
         ServerDescription.Builder builder = ServerDescription.builder();
         builder.address(new ServerAddress(serverDescription.getString("address").getValue()));
-        builder.type(getServerType(serverDescription.getString("type").getValue()));
+        ServerType serverType = getServerType(serverDescription.getString("type").getValue());
+        builder.ok(serverType != ServerType.UNKNOWN);
+        builder.type(serverType);
         if (serverDescription.containsKey("tags")) {
             builder.tagSet(buildTagSet(serverDescription.getDocument("tags")));
         }
@@ -157,8 +159,8 @@ public class ServerSelectionSelectionTest {
             builder.roundTripTime(serverDescription.getNumber("avg_rtt_ms").asInt32().getValue(), TimeUnit.MILLISECONDS);
         }
         builder.state(ServerConnectionState.CONNECTED);
-        if (serverDescription.containsKey("lastWriteDate")) {
-            builder.lastWriteDate(new Date(serverDescription.getNumber("lastWriteDate").longValue()));
+        if (serverDescription.containsKey("lastWrite")) {
+            builder.lastWriteDate(new Date(serverDescription.getDocument("lastWrite").getNumber("lastWriteDate").longValue()));
         }
         if (serverDescription.containsKey("lastUpdateTime")) {
             builder.lastUpdateTimeNanos(serverDescription.getNumber("lastUpdateTime").longValue() * 1000000);  // convert to nanos
@@ -168,7 +170,6 @@ public class ServerSelectionSelectionTest {
         if (serverDescription.containsKey("maxWireVersion")) {
             builder.maxWireVersion(serverDescription.getNumber("maxWireVersion").intValue());
         }
-        builder.ok(true);
         return builder.build();
     }
 
@@ -216,17 +217,20 @@ public class ServerSelectionSelectionTest {
     }
 
     private ServerSelector getServerSelector() {
-        if (definition.getString("operation" , new BsonString("read")).getValue().equals("write")) {
+        if (definition.getString("operation", new BsonString("read")).getValue().equals("write")) {
             return new WritableServerSelector();
         } else {
             BsonDocument readPreferenceDefinition = definition.getDocument("read_preference");
             ReadPreference readPreference;
             if (readPreferenceDefinition.getString("mode").getValue().equals("Primary")) {
                 readPreference = ReadPreference.valueOf("Primary");
+            } else if (readPreferenceDefinition.containsKey("maxStalenessSeconds")) {
+                readPreference = ReadPreference.valueOf(readPreferenceDefinition.getString("mode", new BsonString("Primary")).getValue(),
+                        buildTagSets(readPreferenceDefinition.getArray("tag_sets", new BsonArray())),
+                        Math.round(readPreferenceDefinition.getNumber("maxStalenessSeconds").doubleValue() * 1000), TimeUnit.MILLISECONDS);
             } else {
                 readPreference = ReadPreference.valueOf(readPreferenceDefinition.getString("mode", new BsonString("Primary")).getValue(),
-                        buildTagSets(readPreferenceDefinition.getArray("tag_sets" , new BsonArray())),
-                        readPreferenceDefinition.getNumber("maxStalenessMS" , new BsonInt64(0)).longValue(), TimeUnit.MILLISECONDS);
+                        buildTagSets(readPreferenceDefinition.getArray("tag_sets", new BsonArray())));
             }
             return new ReadPreferenceServerSelector(readPreference);
         }

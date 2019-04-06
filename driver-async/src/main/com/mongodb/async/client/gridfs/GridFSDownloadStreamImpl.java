@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,10 +19,13 @@ package com.mongodb.async.client.gridfs;
 import com.mongodb.MongoGridFSException;
 import com.mongodb.async.AsyncBatchCursor;
 import com.mongodb.async.SingleResultCallback;
+import com.mongodb.async.client.ClientSession;
+import com.mongodb.async.client.FindIterable;
 import com.mongodb.async.client.MongoCollection;
 import com.mongodb.client.gridfs.model.GridFSFile;
 import com.mongodb.diagnostics.logging.Logger;
 import com.mongodb.diagnostics.logging.Loggers;
+import com.mongodb.lang.Nullable;
 import org.bson.Document;
 import org.bson.types.Binary;
 
@@ -37,6 +40,7 @@ import static java.lang.String.format;
 
 final class GridFSDownloadStreamImpl implements GridFSDownloadStream {
     private static final Logger LOGGER = Loggers.getLogger("client.gridfs");
+    private final ClientSession clientSession;
     private final GridFSFindIterable fileInfoIterable;
     private final MongoCollection<Document> chunksCollection;
     private final ConcurrentLinkedQueue<Document> resultsQueue = new ConcurrentLinkedQueue<Document>();
@@ -59,7 +63,9 @@ final class GridFSDownloadStreamImpl implements GridFSDownloadStream {
     private byte[] buffer = null;
 
 
-    GridFSDownloadStreamImpl(final GridFSFindIterable fileInfoIterable, final MongoCollection<Document> chunksCollection) {
+    GridFSDownloadStreamImpl(@Nullable final ClientSession clientSession, final GridFSFindIterable fileInfoIterable,
+                             final MongoCollection<Document> chunksCollection) {
+        this.clientSession = clientSession;
         this.fileInfoIterable = notNull("file information", fileInfoIterable);
         this.chunksCollection = notNull("chunks collection", chunksCollection);
     }
@@ -138,16 +144,65 @@ final class GridFSDownloadStreamImpl implements GridFSDownloadStream {
         });
     }
 
+    @Override
+    public void skip(final long bytesToSkip, final SingleResultCallback<Long> callback) {
+        notNull("callback", callback);
+        final SingleResultCallback<Long> errHandlingCallback = errorHandlingCallback(callback, LOGGER);
+        if (checkClosed()) {
+            errHandlingCallback.onResult(null, null);
+        } else if (!hasFileInfo()) {
+            getGridFSFile(new SingleResultCallback<GridFSFile>() {
+                @Override
+                public void onResult(final GridFSFile result, final Throwable t) {
+                    if (t != null) {
+                        errHandlingCallback.onResult(null, t);
+                    } else {
+                        skip(bytesToSkip, errHandlingCallback);
+                    }
+                }
+            });
+        } else if (bytesToSkip <= 0) {
+            callback.onResult(0L, null);
+        } else {
+            long skippedPosition = currentPosition + bytesToSkip;
+            bufferOffset = (int) (skippedPosition % fileInfo.getChunkSize());
+            if (skippedPosition >= fileInfo.getLength()) {
+                long skipped = fileInfo.getLength() - currentPosition;
+                chunkIndex = numberOfChunks - 1;
+                currentPosition = fileInfo.getLength();
+                buffer = null;
+                discardCursor();
+                callback.onResult(skipped, null);
+            } else {
+                int newChunkIndex = (int) Math.floor(skippedPosition / (double) fileInfo.getChunkSize());
+                if (chunkIndex != newChunkIndex) {
+                    chunkIndex = newChunkIndex;
+                    buffer = null;
+                    discardCursor();
+                }
+                currentPosition += bytesToSkip;
+                callback.onResult(bytesToSkip, null);
+            }
+        }
+    }
+
     private void checkAndFetchResults(final int amountRead, final ByteBuffer dst, final SingleResultCallback<Integer> callback) {
         if (currentPosition == fileInfo.getLength() || dst.remaining() == 0) {
             callback.onResult(amountRead, null);
-        } else if (!resultsQueue.isEmpty()) {
+        } else if (hasResultsToProcess()) {
             processResults(amountRead, dst, callback);
         } else if (cursor == null) {
-            chunksCollection.find(new Document("files_id", fileInfo.getId())
-                    .append("n", new Document("$gte", chunkIndex)))
-                    .batchSize(batchSize).sort(new Document("n", 1))
-                    .batchCursor(new SingleResultCallback<AsyncBatchCursor<Document>>() {
+            Document filter = new Document("files_id", fileInfo.getId())
+                    .append("n", new Document("$gte", chunkIndex));
+
+            FindIterable<Document> findIterable;
+            if (clientSession != null) {
+                findIterable = chunksCollection.find(clientSession, filter);
+            } else {
+                findIterable = chunksCollection.find(filter);
+            }
+            findIterable.batchSize(batchSize).sort(new Document("n", 1)).batchCursor(
+                    new SingleResultCallback<AsyncBatchCursor<Document>>() {
                         @Override
                         public void onResult(final AsyncBatchCursor<Document> result, final Throwable t) {
                             if (t != null) {
@@ -181,23 +236,31 @@ final class GridFSDownloadStreamImpl implements GridFSDownloadStream {
     private void processResults(final int previousAmountRead, final ByteBuffer dst, final SingleResultCallback<Integer> callback) {
         try {
             int amountRead = previousAmountRead;
-            while (currentPosition < fileInfo.getLength() && dst.remaining() > 0 && !resultsQueue.isEmpty()) {
-                if (buffer == null || bufferOffset == buffer.length) {
+            int amountToCopy = dst.remaining();
+            while (currentPosition < fileInfo.getLength() && amountToCopy > 0) {
+
+                if (getBufferFromResultsQueue()) {
+
+                    boolean wasEndOfBuffer = (buffer != null && bufferOffset == buffer.length);
                     buffer = getBufferFromChunk(resultsQueue.poll(), chunkIndex);
-                    bufferOffset = 0;
                     chunkIndex += 1;
+                    if (wasEndOfBuffer) {
+                        bufferOffset = 0;
+                    }
                 }
 
-                int amountToCopy = dst.remaining();
                 if (amountToCopy > buffer.length - bufferOffset) {
                     amountToCopy = buffer.length - bufferOffset;
                 }
-                dst.put(buffer, bufferOffset, amountToCopy);
-                bufferOffset += amountToCopy;
-                currentPosition += amountToCopy;
-                amountRead += amountToCopy;
-            }
 
+                if (amountToCopy > 0) {
+                    dst.put(buffer, bufferOffset, amountToCopy);
+                    bufferOffset += amountToCopy;
+                    currentPosition += amountToCopy;
+                    amountRead += amountToCopy;
+                    amountToCopy = dst.remaining();
+                }
+            }
             checkAndFetchResults(amountRead, dst, callback);
         } catch (MongoGridFSException e) {
             callback.onResult(null, e);
@@ -257,6 +320,14 @@ final class GridFSDownloadStreamImpl implements GridFSDownloadStream {
         }
 
         return data;
+    }
+
+    private boolean getBufferFromResultsQueue() {
+        return !resultsQueue.isEmpty() && (buffer == null || bufferOffset == buffer.length);
+    }
+
+    private boolean hasResultsToProcess() {
+        return !resultsQueue.isEmpty() || (buffer != null && bufferOffset < buffer.length);
     }
 
     private <A> boolean tryGetReadingLock(final SingleResultCallback<A> callback) {

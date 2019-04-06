@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,9 @@ import org.junit.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 
+import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -49,20 +51,29 @@ public class BsonBinaryWriterTest {
         writer.close();
     }
 
-    @Test(expected = BsonSerializationException.class)
+    @Test
     public void shouldThrowWhenMaxDocumentSizeIsExceeded() {
-        writer.writeStartDocument();
-        writer.writeBinaryData("b", new BsonBinary(new byte[1024]));
-        writer.writeEndDocument();
+        try {
+            writer.writeStartDocument();
+            writer.writeBinaryData("b", new BsonBinary(new byte[1024]));
+            writer.writeEndDocument();
+            fail();
+        } catch (BsonMaximumSizeExceededException e) {
+            assertEquals("Document size of 1037 is larger than maximum of 1024.", e.getMessage());
+        }
     }
 
-    @Test(expected = BsonSerializationException.class)
+    @Test
     public void shouldThrowIfAPushedMaxDocumentSizeIsExceeded() {
-        writer.writeStartDocument();
-        writer.pushMaxDocumentSize(10);
-        writer.writeStartDocument("doc");
-        writer.writeString("s", "123456789");
-        writer.writeEndDocument();
+        try {
+            writer.writeStartDocument();
+            writer.pushMaxDocumentSize(10);
+            writer.writeStartDocument("doc");
+            writer.writeString("s", "123456789");
+            writer.writeEndDocument();
+        } catch (BsonMaximumSizeExceededException e) {
+            assertEquals("Document size of 22 is larger than maximum of 10.", e.getMessage());
+        }
     }
 
     @Test
@@ -272,10 +283,6 @@ public class BsonBinaryWriterTest {
         writer.writeMaxKey();
 
         writer.writeEndDocument();
-
-        for (final byte b : buffer.toByteArray()) {
-            System.out.print(b + ", ");
-        }
 
         byte[] expectedValues = {17, 0, 0, 0, 127, 107, 49, 0, -1, 107, 50, 0, 127, 107, 51, 0, 0};
         assertArrayEquals(expectedValues, buffer.toByteArray());
@@ -626,6 +633,98 @@ public class BsonBinaryWriterTest {
         assertEquals(0, reader2.readInt32("i"));
         reader2.readEndDocument();
         reader2.readEndDocument();
+    }
+
+    @Test
+    public void testPipeWithExtraElements() {
+        writer.writeStartDocument();
+        writer.writeBoolean("a", true);
+        writer.writeString("$db", "test");
+        writer.writeStartDocument("$readPreference");
+        writer.writeString("mode", "primary");
+        writer.writeEndDocument();
+        writer.writeEndDocument();
+
+        byte[] bytes = buffer.toByteArray();
+
+        BasicOutputBuffer pipedBuffer = new BasicOutputBuffer();
+        BsonBinaryWriter pipedWriter = new BsonBinaryWriter(new BsonWriterSettings(100),
+                new BsonBinaryWriterSettings(1024), pipedBuffer);
+
+        pipedWriter.writeStartDocument();
+        pipedWriter.writeBoolean("a", true);
+        pipedWriter.writeEndDocument();
+
+        List<BsonElement> extraElements = asList(
+                new BsonElement("$db", new BsonString("test")),
+                new BsonElement("$readPreference", new BsonDocument("mode", new BsonString("primary")))
+        );
+
+        BasicOutputBuffer newBuffer = new BasicOutputBuffer();
+        BsonBinaryWriter newWriter = new BsonBinaryWriter(newBuffer);
+        try {
+            BsonBinaryReader reader =
+                    new BsonBinaryReader(new ByteBufferBsonInput(new ByteBufNIO(ByteBuffer.wrap(pipedBuffer.toByteArray()))));
+            try {
+                newWriter.pipe(reader, extraElements);
+            } finally {
+                reader.close();
+            }
+        } finally {
+            newWriter.close();
+        }
+        assertArrayEquals(bytes, newBuffer.toByteArray());
+    }
+
+    @Test
+    public void testPipeOfNestedDocumentWithExtraElements() {
+        writer.writeStartDocument();
+        writer.writeStartDocument("nested");
+
+        writer.writeBoolean("a", true);
+        writer.writeString("$db", "test");
+        writer.writeStartDocument("$readPreference");
+        writer.writeString("mode", "primary");
+        writer.writeEndDocument();
+        writer.writeEndDocument();
+
+        writer.writeBoolean("b", true);
+        writer.writeEndDocument();
+
+        byte[] bytes = buffer.toByteArray();
+
+        BasicOutputBuffer pipedBuffer = new BasicOutputBuffer();
+        BsonBinaryWriter pipedWriter = new BsonBinaryWriter(new BsonWriterSettings(100),
+                new BsonBinaryWriterSettings(1024), pipedBuffer);
+
+        pipedWriter.writeStartDocument();
+        pipedWriter.writeBoolean("a", true);
+        pipedWriter.writeEndDocument();
+
+        List<BsonElement> extraElements = asList(
+                new BsonElement("$db", new BsonString("test")),
+                new BsonElement("$readPreference", new BsonDocument("mode", new BsonString("primary")))
+        );
+
+        BasicOutputBuffer newBuffer = new BasicOutputBuffer();
+        BsonBinaryWriter newWriter = new BsonBinaryWriter(newBuffer);
+        try {
+            BsonBinaryReader reader =
+                    new BsonBinaryReader(new ByteBufferBsonInput(new ByteBufNIO(ByteBuffer.wrap(pipedBuffer.toByteArray()))));
+            try {
+                newWriter.writeStartDocument();
+                newWriter.writeName("nested");
+                newWriter.pipe(reader, extraElements);
+                newWriter.writeBoolean("b", true);
+                newWriter.writeEndDocument();
+            } finally {
+                reader.close();
+            }
+        } finally {
+            newWriter.close();
+        }
+        byte[] actualBytes = newBuffer.toByteArray();
+        assertArrayEquals(bytes, actualBytes);
     }
 
     @Test

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package com.mongodb.operation;
 
 import com.mongodb.MongoNamespace;
-import com.mongodb.ReadConcern;
 import com.mongodb.ServerAddress;
 import com.mongodb.async.AsyncBatchCursor;
 import com.mongodb.async.SingleResultCallback;
@@ -25,6 +24,7 @@ import com.mongodb.binding.AsyncConnectionSource;
 import com.mongodb.binding.AsyncReadBinding;
 import com.mongodb.binding.ConnectionSource;
 import com.mongodb.binding.ReadBinding;
+import com.mongodb.client.model.Collation;
 import com.mongodb.connection.AsyncConnection;
 import com.mongodb.connection.Connection;
 import com.mongodb.connection.ConnectionDescription;
@@ -32,6 +32,7 @@ import com.mongodb.connection.QueryResult;
 import com.mongodb.operation.CommandOperationHelper.CommandTransformer;
 import com.mongodb.operation.OperationHelper.AsyncCallableWithConnectionAndSource;
 import com.mongodb.operation.OperationHelper.CallableWithConnectionAndSource;
+import com.mongodb.session.SessionContext;
 import org.bson.BsonDocument;
 import org.bson.BsonString;
 import org.bson.codecs.Codec;
@@ -43,12 +44,13 @@ import static com.mongodb.assertions.Assertions.notNull;
 import static com.mongodb.internal.async.ErrorHandlingResultCallback.errorHandlingCallback;
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocol;
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocolAsync;
-import static com.mongodb.operation.DocumentHelper.putIfNotNull;
+import static com.mongodb.operation.DocumentHelper.putIfNotNullOrEmpty;
 import static com.mongodb.operation.DocumentHelper.putIfNotZero;
 import static com.mongodb.operation.OperationHelper.LOGGER;
-import static com.mongodb.operation.OperationHelper.checkValidReadConcern;
 import static com.mongodb.operation.OperationHelper.releasingCallback;
+import static com.mongodb.operation.OperationHelper.validateReadConcernAndCollation;
 import static com.mongodb.operation.OperationHelper.withConnection;
+import static com.mongodb.operation.OperationReadConcernHelper.appendReadConcernToCommand;
 
 /**
  * Finds the distinct values for a specified field across a single collection.
@@ -59,6 +61,7 @@ import static com.mongodb.operation.OperationHelper.withConnection;
  * @mongodb.driver.manual reference/command/distinct Distinct Command
  * @since 3.0
  */
+@Deprecated
 public class DistinctOperation<T> implements AsyncReadOperation<AsyncBatchCursor<T>>, ReadOperation<BatchCursor<T>> {
     private static final String VALUES = "values";
 
@@ -67,7 +70,7 @@ public class DistinctOperation<T> implements AsyncReadOperation<AsyncBatchCursor
     private final Decoder<T> decoder;
     private BsonDocument filter;
     private long maxTimeMS;
-    private ReadConcern readConcern = ReadConcern.DEFAULT;
+    private Collation collation;
 
     /**
      * Construct an instance.
@@ -129,25 +132,27 @@ public class DistinctOperation<T> implements AsyncReadOperation<AsyncBatchCursor
     }
 
     /**
-     * Gets the read concern
+     * Returns the collation options
      *
-     * @return the read concern
-     * @since 3.2
-     * @mongodb.driver.manual reference/readConcern/ Read Concern
+     * @return the collation options
+     * @since 3.4
+     * @mongodb.server.release 3.4
      */
-    public ReadConcern getReadConcern() {
-        return readConcern;
+    public Collation getCollation() {
+        return collation;
     }
 
     /**
-     * Sets the read concern
-     * @param readConcern the read concern
+     * Sets the collation options
+     *
+     * <p>A null value represents the server default.</p>
+     * @param collation the collation options to use
      * @return this
-     * @since 3.2
-     * @mongodb.driver.manual reference/readConcern/ Read Concern
+     * @since 3.4
+     * @mongodb.server.release 3.4
      */
-    public DistinctOperation<T> readConcern(final ReadConcern readConcern) {
-        this.readConcern = notNull("readConcern", readConcern);
+    public DistinctOperation<T> collation(final Collation collation) {
+        this.collation = collation;
         return this;
     }
 
@@ -156,9 +161,9 @@ public class DistinctOperation<T> implements AsyncReadOperation<AsyncBatchCursor
         return withConnection(binding, new CallableWithConnectionAndSource<BatchCursor<T>>() {
             @Override
             public BatchCursor<T> call(final ConnectionSource source, final Connection connection) {
-                checkValidReadConcern(connection, readConcern);
-                return executeWrappedCommandProtocol(binding, namespace.getDatabaseName(), getCommand(), createCommandDecoder(),
-                        connection, transformer(source, connection));
+                validateReadConcernAndCollation(connection, binding.getSessionContext().getReadConcern(), collation);
+                return executeWrappedCommandProtocol(binding, namespace.getDatabaseName(), getCommand(binding.getSessionContext()),
+                        createCommandDecoder(), connection, transformer(source, connection));
             }
         });
     }
@@ -174,17 +179,18 @@ public class DistinctOperation<T> implements AsyncReadOperation<AsyncBatchCursor
                 } else {
                     final SingleResultCallback<AsyncBatchCursor<T>> wrappedCallback = releasingCallback(
                             errHandlingCallback, source, connection);
-                    checkValidReadConcern(source, connection, readConcern, new AsyncCallableWithConnectionAndSource() {
-                        @Override
-                        public void call(final AsyncConnectionSource source, final AsyncConnection connection, final Throwable t) {
-                            if (t != null) {
-                                wrappedCallback.onResult(null, t);
-                            } else {
-                                executeWrappedCommandProtocolAsync(binding, namespace.getDatabaseName(), getCommand(),
-                                        createCommandDecoder(),
-                                        connection, asyncTransformer(connection.getDescription()), wrappedCallback);
-                            }
-                        }
+                    validateReadConcernAndCollation(source, connection, binding.getSessionContext().getReadConcern(), collation,
+                            new AsyncCallableWithConnectionAndSource() {
+                                @Override
+                                public void call(final AsyncConnectionSource source, final AsyncConnection connection, final Throwable t) {
+                                    if (t != null) {
+                                        wrappedCallback.onResult(null, t);
+                                    } else {
+                                        executeWrappedCommandProtocolAsync(binding, namespace.getDatabaseName(),
+                                                getCommand(binding.getSessionContext()), createCommandDecoder(),
+                                                connection, asyncTransformer(connection.getDescription()), wrappedCallback);
+                                    }
+                                }
                     });
                 }
             }
@@ -215,19 +221,20 @@ public class DistinctOperation<T> implements AsyncReadOperation<AsyncBatchCursor
             @Override
             public AsyncBatchCursor<T> apply(final BsonDocument result, final ServerAddress serverAddress) {
                 QueryResult<T> queryResult = createQueryResult(result, connectionDescription);
-                return new AsyncQueryBatchCursor<T>(queryResult, 0, 0, null);
+                return new AsyncSingleBatchQueryCursor<T>(queryResult);
             }
         };
     }
 
-    private BsonDocument getCommand() {
-        BsonDocument cmd = new BsonDocument("distinct", new BsonString(namespace.getCollectionName()));
-        cmd.put("key", new BsonString(fieldName));
-        putIfNotNull(cmd, "query", filter);
-        putIfNotZero(cmd, "maxTimeMS", maxTimeMS);
-        if (!readConcern.isServerDefault()) {
-            cmd.put("readConcern", readConcern.asDocument());
+    private BsonDocument getCommand(final SessionContext sessionContext) {
+        BsonDocument commandDocument = new BsonDocument("distinct", new BsonString(namespace.getCollectionName()));
+        appendReadConcernToCommand(sessionContext, commandDocument);
+        commandDocument.put("key", new BsonString(fieldName));
+        putIfNotNullOrEmpty(commandDocument, "query", filter);
+        putIfNotZero(commandDocument, "maxTimeMS", maxTimeMS);
+        if (collation != null) {
+            commandDocument.put("collation", collation.asDocument());
         }
-        return cmd;
+        return commandDocument;
     }
 }

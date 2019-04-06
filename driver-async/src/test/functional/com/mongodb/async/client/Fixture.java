@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,29 +16,35 @@
 
 package com.mongodb.async.client;
 
+import com.mongodb.Block;
+import com.mongodb.ClusterFixture;
 import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoCommandException;
+import com.mongodb.MongoInterruptedException;
 import com.mongodb.MongoNamespace;
+import com.mongodb.MongoTimeoutException;
 import com.mongodb.async.FutureResultCallback;
-import com.mongodb.connection.ClusterSettings;
-import com.mongodb.connection.ConnectionPoolSettings;
-import com.mongodb.connection.ServerSettings;
-import com.mongodb.connection.SocketSettings;
+import com.mongodb.connection.AsynchronousSocketChannelStreamFactoryFactory;
 import com.mongodb.connection.SslSettings;
+import com.mongodb.connection.StreamFactoryFactory;
+import com.mongodb.connection.TlsChannelStreamFactoryFactory;
+import com.mongodb.connection.netty.NettyStreamFactoryFactory;
 import org.bson.Document;
 
+import static com.mongodb.ClusterFixture.getSslSettings;
+import static com.mongodb.ClusterFixture.isNotAtLeastJava7;
+import static com.mongodb.ClusterFixture.isNotAtLeastJava8;
 import static com.mongodb.connection.ClusterType.SHARDED;
+import static java.lang.Thread.sleep;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * Helper class for asynchronous tests.
  */
 public final class Fixture {
-    public static final String DEFAULT_URI = "mongodb://localhost:27017";
-    public static final String MONGODB_URI_SYSTEM_PROPERTY_NAME = "org.mongodb.test.uri";
     private static final String DEFAULT_DATABASE_NAME = "JavaDriverTest";
 
-    private static ConnectionString connectionString;
     private static MongoClientImpl mongoClient;
 
 
@@ -47,44 +53,49 @@ public final class Fixture {
 
     public static synchronized MongoClient getMongoClient() {
         if (mongoClient == null) {
-            MongoClientSettings.Builder builder = getMongoClientBuilderFromConnectionString();
-            mongoClient = (MongoClientImpl) MongoClients.create(builder.build());
+            mongoClient = (MongoClientImpl) MongoClients.create(getMongoClientBuilderFromConnectionString().build());
             Runtime.getRuntime().addShutdownHook(new ShutdownHook());
         }
         return mongoClient;
     }
 
-    public static MongoClientSettings.Builder getMongoClientBuilderFromConnectionString() {
-        SslSettings.Builder sslSettingsBuilder = SslSettings.builder().applyConnectionString(getConnectionString());
+    public static MongoClientSettings getMongoClientSettings() {
+        return getMongoClientBuilderFromConnectionString().build();
+    }
+
+    public static com.mongodb.MongoClientSettings.Builder getMongoClientBuilderFromConnectionString() {
+        com.mongodb.MongoClientSettings.Builder builder = com.mongodb.MongoClientSettings.builder()
+                .applyConnectionString(getConnectionString());
         if (System.getProperty("java.version").startsWith("1.6.")) {
-            sslSettingsBuilder.invalidHostNameAllowed(true);
+            builder.applyToSslSettings(new Block<SslSettings.Builder>() {
+                @Override
+                public void apply(final SslSettings.Builder builder) {
+                    builder.invalidHostNameAllowed(true);
+                }
+            });
         }
-        ClusterSettings clusterSettings = ClusterSettings.builder()
-                                                         .applyConnectionString(getConnectionString())
-                                                         .build();
-        ConnectionPoolSettings connectionPoolSettings = ConnectionPoolSettings.builder()
-                                                                              .applyConnectionString(getConnectionString())
-                                                                              .build();
-        SocketSettings socketSettings = SocketSettings.builder()
-                                                      .applyConnectionString(getConnectionString())
-                                                      .build();
-        return MongoClientSettings.builder()
-                .clusterSettings(clusterSettings)
-                .connectionPoolSettings(connectionPoolSettings)
-                .serverSettings(ServerSettings.builder().build())
-                .credentialList(getConnectionString().getCredentialList())
-                .sslSettings(sslSettingsBuilder.build())
-                .socketSettings(socketSettings);
+        builder.streamFactoryFactory(getStreamFactoryFactory());
+        return builder;
+    }
+
+    public static StreamFactoryFactory getStreamFactoryFactory() {
+        if (getSslSettings().isEnabled()) {
+            if (isNotAtLeastJava8()) {
+                return NettyStreamFactoryFactory.builder().build();
+            } else {
+                return new TlsChannelStreamFactoryFactory();
+            }
+        } else {
+            if (isNotAtLeastJava7()) {
+                return NettyStreamFactoryFactory.builder().build();
+            } else {
+                return AsynchronousSocketChannelStreamFactoryFactory.builder().build();
+            }
+        }
     }
 
     public static synchronized ConnectionString getConnectionString() {
-        if (connectionString == null) {
-            String mongoURIProperty = System.getProperty(MONGODB_URI_SYSTEM_PROPERTY_NAME);
-            String mongoURIString = mongoURIProperty == null || mongoURIProperty.isEmpty()
-                                    ? DEFAULT_URI : mongoURIProperty;
-            connectionString = new ConnectionString(mongoURIString);
-        }
-        return connectionString;
+        return ClusterFixture.getConnectionString();
     }
 
     public static String getDefaultDatabaseName() {
@@ -147,6 +158,29 @@ public final class Fixture {
         } catch (Throwable t) {
             throw new RuntimeException(t);
         }
+    }
+
+    public static synchronized void waitForLastServerSessionPoolRelease() {
+        if (mongoClient != null) {
+            long startTime = System.currentTimeMillis();
+            int sessionInUseCount = getSessionInUseCount();
+            while (sessionInUseCount > 0) {
+                try {
+                    if (System.currentTimeMillis() > startTime + ClusterFixture.TIMEOUT * 1000) {
+                        throw new MongoTimeoutException("Timed out waiting for server session pool in use count to drop to 0.  Now at: "
+                                + sessionInUseCount);
+                    }
+                    sleep(10);
+                    sessionInUseCount = getSessionInUseCount();
+                } catch (InterruptedException e) {
+                    throw new MongoInterruptedException("Interrupted", e);
+                }
+            }
+        }
+    }
+
+    private static int getSessionInUseCount() {
+        return mongoClient.getServerSessionPool().getInUseCount();
     }
 
     static class ShutdownHook extends Thread {

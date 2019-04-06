@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,26 +16,18 @@
 
 package com.mongodb.operation
 
-import category.Async
 import com.mongodb.MongoCommandException
 import com.mongodb.MongoNamespace
+import com.mongodb.MongoSocketException
 import com.mongodb.MongoWriteConcernException
 import com.mongodb.OperationFunctionalSpecification
+import com.mongodb.ServerAddress
 import com.mongodb.WriteConcern
-import com.mongodb.async.SingleResultCallback
-import com.mongodb.binding.AsyncConnectionSource
-import com.mongodb.binding.AsyncWriteBinding
-import com.mongodb.binding.ConnectionSource
-import com.mongodb.binding.WriteBinding
 import com.mongodb.client.model.CreateCollectionOptions
 import com.mongodb.client.model.ValidationOptions
 import com.mongodb.client.test.CollectionHelper
 import com.mongodb.client.test.Worker
 import com.mongodb.client.test.WorkerCodec
-import com.mongodb.connection.AsyncConnection
-import com.mongodb.connection.Connection
-import com.mongodb.connection.ConnectionDescription
-import com.mongodb.connection.ServerVersion
 import org.bson.BsonBoolean
 import org.bson.BsonDocument
 import org.bson.BsonDocumentWrapper
@@ -46,31 +38,35 @@ import org.bson.BsonString
 import org.bson.Document
 import org.bson.codecs.BsonDocumentCodec
 import org.bson.codecs.DocumentCodec
-import org.junit.experimental.categories.Category
 import spock.lang.IgnoreIf
 
 import java.util.concurrent.TimeUnit
 
-import static com.mongodb.ClusterFixture.executeAsync
-import static com.mongodb.ClusterFixture.getBinding
+import static com.mongodb.ClusterFixture.configureFailPoint
+import static com.mongodb.ClusterFixture.disableFailPoint
+import static com.mongodb.ClusterFixture.disableOnPrimaryTransactionalWriteFailPoint
+import static com.mongodb.ClusterFixture.enableOnPrimaryTransactionalWriteFailPoint
 import static com.mongodb.ClusterFixture.isDiscoverableReplicaSet
 import static com.mongodb.ClusterFixture.serverVersionAtLeast
+import static com.mongodb.WriteConcern.UNACKNOWLEDGED
+import static com.mongodb.WriteConcern.W1
 import static com.mongodb.client.model.Filters.gte
-import static java.util.Arrays.asList
+import static com.mongodb.WriteConcern.ACKNOWLEDGED
+import static com.mongodb.connection.ServerType.REPLICA_SET_PRIMARY
+import static com.mongodb.connection.ServerType.STANDALONE
 
 class FindAndUpdateOperationSpecification extends OperationFunctionalSpecification {
     private final DocumentCodec documentCodec = new DocumentCodec()
     private final WorkerCodec workerCodec = new WorkerCodec()
-    def writeConcern = WriteConcern.ACKNOWLEDGED
 
     def 'should have the correct defaults and passed values'() {
         when:
         def update = new BsonDocument('update', new BsonInt32(1))
-        def operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update)
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, false, documentCodec, update)
 
         then:
         operation.getNamespace() == getNamespace()
-        operation.getWriteConcern() == writeConcern
+        operation.getWriteConcern() == ACKNOWLEDGED
         operation.getDecoder() == documentCodec
         operation.getUpdate() == update
         operation.getFilter() == null
@@ -78,6 +74,7 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
         operation.getProjection() == null
         operation.getMaxTime(TimeUnit.SECONDS) == 0
         operation.getBypassDocumentValidation() == null
+        operation.getCollation() == null
     }
 
     def 'should set optional values correctly'(){
@@ -87,10 +84,11 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
         def projection = new BsonDocument('projection', new BsonInt32(1))
 
         when:
-        def operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec,
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, false, documentCodec,
                 new BsonDocument('update', new BsonInt32(1))).filter(filter).sort(sort).projection(projection)
                 .bypassDocumentValidation(true).maxTime(1, TimeUnit.SECONDS).upsert(true)
                 .returnOriginal(false)
+                .collation(defaultCollation)
 
         then:
         operation.getFilter() == filter
@@ -100,10 +98,10 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
         operation.getMaxTime(TimeUnit.SECONDS) == 1
         operation.getBypassDocumentValidation()
         !operation.isReturnOriginal()
+        operation.getCollation() == defaultCollation
     }
 
     def 'should update single document'() {
-
         given:
         CollectionHelper<Document> helper = new CollectionHelper<Document>(documentCodec, getNamespace())
         Document pete = new Document('name', 'Pete').append('numberOfJobs', 3)
@@ -113,9 +111,9 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
 
         when:
         def update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
-        def operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update)
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, false, documentCodec, update)
                 .filter(new BsonDocument('name', new BsonString('Pete')))
-        Document returnedDocument = operation.execute(getBinding())
+        Document returnedDocument = execute(operation, async)
 
         then:
         returnedDocument.getInteger('numberOfJobs') == 3
@@ -124,45 +122,16 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
 
         when:
         update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
-        operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update)
+        operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, false, documentCodec, update)
                 .filter(new BsonDocument('name', new BsonString('Pete')))
                 .returnOriginal(false)
-        returnedDocument = operation.execute(getBinding())
+        returnedDocument = execute(operation, async)
 
         then:
         returnedDocument.getInteger('numberOfJobs') == 5
-    }
 
-    @Category(Async)
-    def 'should update single document asynchronously'() {
-        given:
-        CollectionHelper<Document> helper = new CollectionHelper<Document>(documentCodec, getNamespace())
-        Document pete = new Document('name', 'Pete').append('numberOfJobs', 3)
-        Document sam = new Document('name', 'Sam').append('numberOfJobs', 5)
-
-        helper.insertDocuments(new DocumentCodec(), pete, sam)
-
-        when:
-        def update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
-        def operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update)
-                .filter(new BsonDocument('name', new BsonString('Pete')))
-                .returnOriginal(true)
-        Document returnedDocument = executeAsync(operation)
-
-        then:
-        returnedDocument.getInteger('numberOfJobs') == 3
-        helper.find().size() == 2;
-        helper.find().get(0).getInteger('numberOfJobs') == 4
-
-        when:
-        update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
-        operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update)
-                .filter(new BsonDocument('name', new BsonString('Pete')))
-                .returnOriginal(false)
-        returnedDocument = executeAsync(operation)
-
-        then:
-        returnedDocument.getInteger('numberOfJobs') == 5
+        where:
+        async << [true, false]
     }
 
     def 'should update single document when using custom codecs'() {
@@ -175,9 +144,9 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
 
         when:
         def update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
-        def operation = new FindAndUpdateOperation<Worker>(getNamespace(), writeConcern, workerCodec, update)
+        def operation = new FindAndUpdateOperation<Worker>(getNamespace(), ACKNOWLEDGED, false, workerCodec, update)
                 .filter(new BsonDocument('name', new BsonString('Pete')))
-        Worker returnedDocument = operation.execute(getBinding())
+        Worker returnedDocument = execute(operation, async)
 
         then:
         returnedDocument.numberOfJobs == 3
@@ -186,89 +155,48 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
 
         when:
         update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
-        operation = new FindAndUpdateOperation<Worker>(getNamespace(), writeConcern, workerCodec, update)
+        operation = new FindAndUpdateOperation<Worker>(getNamespace(), ACKNOWLEDGED, false, workerCodec, update)
                 .filter(new BsonDocument('name', new BsonString('Pete')))
                 .returnOriginal(false)
-        returnedDocument = operation.execute(getBinding())
+        returnedDocument = execute(operation, async)
 
         then:
         returnedDocument.numberOfJobs == 5
-    }
 
-    @Category(Async)
-    def 'should update single document when using custom codecs asynchronously'() {
-        given:
-        CollectionHelper<Worker> helper = new CollectionHelper<Worker>(workerCodec, getNamespace())
-        Worker pete = new Worker('Pete', 'handyman', new Date(), 3)
-        Worker sam = new Worker('Sam', 'plumber', new Date(), 5)
-
-        helper.insertDocuments(new WorkerCodec(), pete, sam)
-
-        when:
-        def update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
-        def operation = new FindAndUpdateOperation<Worker>(getNamespace(), writeConcern, workerCodec, update)
-                .filter(new BsonDocument('name', new BsonString('Pete')))
-        Worker returnedDocument = executeAsync(operation)
-
-        then:
-        returnedDocument.numberOfJobs == 3
-        helper.find().size() == 2;
-        helper.find().get(0).numberOfJobs == 4
-
-        when:
-        update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
-        operation = new FindAndUpdateOperation<Worker>(getNamespace(), workerCodec, update)
-                .filter(new BsonDocument('name', new BsonString('Pete')))
-                .returnOriginal(false)
-        returnedDocument = executeAsync(operation)
-
-        then:
-        returnedDocument.numberOfJobs == 5
+        where:
+        async << [true, false]
     }
 
     def 'should return null if query fails to match'() {
         when:
         def update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
-        def operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update)
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, false, documentCodec, update)
                 .filter(new BsonDocument('name', new BsonString('Pete')))
-        Document returnedDocument = operation.execute(getBinding())
+        Document returnedDocument = execute(operation, async)
 
         then:
         returnedDocument == null
-    }
 
-    @Category(Async)
-    def 'should return null if query fails to match asynchronously'() {
-        when:
-        def update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
-        def operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update)
-                .filter(new BsonDocument('name', new BsonString('Pete')))
-        Document returnedDocument = executeAsync(operation)
-
-        then:
-        returnedDocument == null
+        where:
+        async << [true, false]
     }
 
     def 'should throw an exception if update contains fields that are not update operators'() {
-        when:
+        given:
         def update = new BsonDocument('x', new BsonInt32(1))
-        new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update).execute(getBinding())
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, false, documentCodec, update)
+
+        when:
+        execute(operation, async)
 
         then:
         thrown(IllegalArgumentException)
+
+        where:
+        async << [true, false]
     }
 
-    @Category(Async)
-    def 'should throw an exception if update contains fields that are not update operators asynchronously'() {
-        when:
-        def update = new BsonDocument('x', new BsonInt32(1))
-        executeAsync(new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update))
-
-        then:
-        thrown(IllegalArgumentException)
-    }
-
-    @IgnoreIf({ !serverVersionAtLeast(asList(3, 1, 8)) })
+    @IgnoreIf({ !serverVersionAtLeast(3, 2) })
     def 'should support bypassDocumentValidation'() {
         given:
         def namespace = new MongoNamespace(getDatabaseName(), 'collectionOut')
@@ -279,20 +207,22 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
 
         when:
         def update = new BsonDocument('$inc', new BsonDocument('level', new BsonInt32(-1)))
-        def operation = new FindAndUpdateOperation<Document>(namespace, writeConcern, documentCodec, update)
-        operation.execute(getBinding())
+        def operation = new FindAndUpdateOperation<Document>(namespace, ACKNOWLEDGED, false, documentCodec, update)
+        execute(operation, async)
 
         then:
         thrown(MongoCommandException)
 
         when:
-        operation.bypassDocumentValidation(false).execute(getBinding())
+        operation.bypassDocumentValidation(false)
+        execute(operation, async)
 
         then:
         thrown(MongoCommandException)
 
         when:
-        Document returnedDocument = operation.bypassDocumentValidation(true).returnOriginal(false).execute(getBinding())
+        operation.bypassDocumentValidation(true).returnOriginal(false)
+        Document returnedDocument = execute(operation, async)
 
         then:
         notThrown(MongoCommandException)
@@ -300,53 +230,21 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
 
         cleanup:
         collectionHelper?.drop()
+
+        where:
+        async << [true, false]
     }
 
-    @Category(Async)
-    @IgnoreIf({ !serverVersionAtLeast(asList(3, 1, 8)) })
-    def 'should support bypassDocumentValidation asynchronously'() {
-        given:
-        def namespace = new MongoNamespace(getDatabaseName(), 'collectionOut')
-        def collectionHelper = getCollectionHelper(namespace)
-        collectionHelper.create('collectionOut', new CreateCollectionOptions().validationOptions(
-                new ValidationOptions().validator(gte('level', 10))))
-        collectionHelper.insertDocuments(BsonDocument.parse('{ level: 10 }'))
-
-        when:
-        def update = new BsonDocument('$inc', new BsonDocument('level', new BsonInt32(-1)))
-        def operation = new FindAndUpdateOperation<Document>(namespace, writeConcern, documentCodec, update)
-        executeAsync(operation)
-
-        then:
-        thrown(MongoCommandException)
-
-        when:
-        executeAsync(operation.bypassDocumentValidation(false))
-
-        then:
-        thrown(MongoCommandException)
-
-        when:
-        Document returnedDocument = executeAsync(operation.bypassDocumentValidation(true).returnOriginal(false))
-
-        then:
-        notThrown(MongoCommandException)
-        returnedDocument.getInteger('level') == 9
-
-        cleanup:
-        collectionHelper?.drop()
-    }
-
-    @IgnoreIf({ !serverVersionAtLeast(asList(3, 2, 0)) || !isDiscoverableReplicaSet() })
+    @IgnoreIf({ !serverVersionAtLeast(3, 2) || !isDiscoverableReplicaSet() })
     def 'should throw on write concern error'() {
         given:
         getCollectionHelper().insertDocuments(new DocumentCodec(), new Document('name', 'Pete'))
         def update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
 
         when:
-        def operation = new FindAndUpdateOperation<Document>(getNamespace(), new WriteConcern(5, 1), documentCodec, update)
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), new WriteConcern(5, 1), false, documentCodec, update)
                 .filter(new BsonDocument('name', new BsonString('Pete')))
-        operation.execute(getBinding())
+        execute(operation, async)
 
         then:
         def ex = thrown(MongoWriteConcernException)
@@ -357,85 +255,86 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
         ex.writeResult.upsertedId == null
 
         when:
-        operation = new FindAndUpdateOperation<Document>(getNamespace(), new WriteConcern(5, 1), documentCodec, update)
+        operation = new FindAndUpdateOperation<Document>(getNamespace(), new WriteConcern(5, 1), false, documentCodec, update)
                 .filter(new BsonDocument('name', new BsonString('Bob')))
                 .upsert(true)
-        operation.execute(getBinding())
+        execute(operation, async)
 
         then:
         ex = thrown(MongoWriteConcernException)
         ex.writeResult.count == 1
         !ex.writeResult.updateOfExisting
         ex.writeResult.upsertedId instanceof BsonObjectId
+
+        where:
+        async << [true, false]
     }
 
-    @IgnoreIf({ !serverVersionAtLeast(asList(3, 2, 0)) || !isDiscoverableReplicaSet() })
-    def 'should throw on write concern error asynchronously'() {
+    @IgnoreIf({ !serverVersionAtLeast(3, 8) || !isDiscoverableReplicaSet() })
+    def 'should throw on write concern error on multiple failpoint'() {
         given:
-        getCollectionHelper().insertDocuments(new DocumentCodec(), new Document('name', 'Pete'))
+        CollectionHelper<Document> helper = new CollectionHelper<Document>(documentCodec, getNamespace())
+        helper.insertDocuments(new DocumentCodec(), new Document('name', 'Pete'))
+
+        def failPoint = BsonDocument.parse('''{
+            "configureFailPoint": "failCommand",
+            "mode": {"times": 2 },
+            "data": { "failCommands": ["findAndModify"],
+                      "writeConcernError": {"code": 91, "errmsg": "Replication is being shut down"}}}''')
+        configureFailPoint(failPoint)
+
         def update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, false, documentCodec, update)
+                .filter(new BsonDocument('name', new BsonString('Pete')))
 
         when:
-        def operation = new FindAndUpdateOperation<Document>(getNamespace(), new WriteConcern(5, 1), documentCodec, update)
-                .filter(new BsonDocument('name', new BsonString('Pete')))
-        executeAsync(operation)
+        execute(operation, async)
 
         then:
         def ex = thrown(MongoWriteConcernException)
-        ex.writeConcernError.code == 100
+        ex.writeConcernError.code == 91
         !ex.writeConcernError.message.isEmpty()
         ex.writeResult.count == 1
         ex.writeResult.updateOfExisting
         ex.writeResult.upsertedId == null
 
-        when:
-        operation = new FindAndUpdateOperation<Document>(getNamespace(), new WriteConcern(5, 1), documentCodec, update)
-                .filter(new BsonDocument('name', new BsonString('Bob')))
-                .upsert(true)
-        executeAsync(operation)
+        cleanup:
+        disableFailPoint('failCommand')
 
-        then:
-        ex = thrown(MongoWriteConcernException)
-        ex.writeResult.count == 1
-        !ex.writeResult.updateOfExisting
-        ex.writeResult.upsertedId instanceof BsonObjectId
+        where:
+        async << [true, false]
     }
 
     def 'should create the expected command'() {
-        given:
+        when:
+        def includeBypassValidation = serverVersionIsGreaterThan(serverVersion, [3, 4, 0])
+        def includeCollation = serverVersionIsGreaterThan(serverVersion, [3, 4, 0])
+        def includeTxnNumber = (serverVersionIsGreaterThan(serverVersion, [3, 6, 0]) && retryWrites
+                && writeConcern.isAcknowledged() && serverType != STANDALONE)
+        def includeWriteConcern = (writeConcern.isAcknowledged() && !writeConcern.isServerDefault()
+                && serverVersionIsGreaterThan(serverVersion, [3, 4, 0]))
         def cannedResult = new BsonDocument('value', new BsonDocumentWrapper(BsonDocument.parse('{}'), new BsonDocumentCodec()))
         def update = BsonDocument.parse('{ update: 1}')
-        def filter = BsonDocument.parse('{ filter : 1}')
-        def sort = BsonDocument.parse('{ sort : 1}')
-        def projection = BsonDocument.parse('{ projection : 1}')
-
-        def connection = Mock(Connection) {
-            _ * getDescription() >> Stub(ConnectionDescription) {
-                getServerVersion() >> serverVersion
-            }
-        }
-        def connectionSource = Stub(ConnectionSource) {
-            getConnection() >> connection
-        }
-
-        def writeBinding = Stub(WriteBinding) {
-            getWriteConnectionSource() >> connectionSource
-        }
-        def operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update)
-        def expectedCommand = new BsonDocument('findandmodify', new BsonString(getNamespace().getCollectionName()))
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, retryWrites, documentCodec, update)
+        def expectedCommand = new BsonDocument('findAndModify', new BsonString(getNamespace().getCollectionName()))
                 .append('update', update)
         if (includeWriteConcern) {
             expectedCommand.put('writeConcern', writeConcern.asDocument())
         }
-
-        when:
-        operation.execute(writeBinding)
+        if (includeTxnNumber) {
+            expectedCommand.put('txnNumber', new BsonInt64(0))
+        }
+        expectedCommand.put('new', BsonBoolean.FALSE)
 
         then:
-        1 * connection.command(getNamespace().getDatabaseName(), _, _, _, _) >> cannedResult
-        1 * connection.release()
+        testOperation([operation: operation, serverVersion: serverVersion, expectedCommand: expectedCommand, async: async,
+                       result: cannedResult, serverType: serverType])
 
         when:
+        def filter = BsonDocument.parse('{ filter : 1}')
+        def sort = BsonDocument.parse('{ sort : 1}')
+        def projection = BsonDocument.parse('{ projection : 1}')
+
         operation.filter(filter)
                 .sort(sort)
                 .projection(projection)
@@ -447,86 +346,165 @@ class FindAndUpdateOperationSpecification extends OperationFunctionalSpecificati
                 .append('fields', projection)
                 .append('maxTimeMS', new BsonInt64(10))
 
+        if (includeCollation) {
+            operation.collation(defaultCollation)
+            expectedCommand.append('collation', defaultCollation.asDocument())
+        }
         if (includeBypassValidation) {
             expectedCommand.append('bypassDocumentValidation', BsonBoolean.TRUE)
         }
 
-        operation.execute(writeBinding)
-
         then:
-        1 * connection.command(getNamespace().getDatabaseName(), expectedCommand, _, _, _) >> cannedResult
-        1 * connection.release()
+        testOperation([operation: operation, serverVersion: serverVersion, expectedCommand: expectedCommand, async: async,
+                       result: cannedResult, serverType: serverType])
 
         where:
-        serverVersion                | writeConcern                 | includeWriteConcern   | includeBypassValidation
-        new ServerVersion([3, 2, 0]) | WriteConcern.W1              | true                  | true
-        new ServerVersion([3, 2, 0]) | WriteConcern.ACKNOWLEDGED    | false                 | true
-        new ServerVersion([3, 2, 0]) | WriteConcern.UNACKNOWLEDGED  | false                 | true
-        new ServerVersion([3, 0, 0]) | WriteConcern.ACKNOWLEDGED    | false                 | false
-        new ServerVersion([3, 0, 0]) | WriteConcern.UNACKNOWLEDGED  | false                 | false
-        new ServerVersion([3, 0, 0]) | WriteConcern.W1              | false                 | false
+        [serverVersion, serverType, writeConcern, async, retryWrites] << [
+                [[3, 6, 0], [3, 4, 0], [3, 0, 0]],
+                [REPLICA_SET_PRIMARY, STANDALONE],
+                [ACKNOWLEDGED, W1, UNACKNOWLEDGED],
+                [true, false],
+                [true, false]
+        ].combinations()
     }
 
-    def 'should create the expected command asynchronously'() {
+    @IgnoreIf({ !serverVersionAtLeast(3, 6) || !isDiscoverableReplicaSet() })
+    def 'should support retryable writes'() {
         given:
-        def cannedResult = new BsonDocument('value', new BsonDocumentWrapper(BsonDocument.parse('{}'), new BsonDocumentCodec()))
-        def update = BsonDocument.parse('{ update: 1}')
-        def filter = BsonDocument.parse('{ filter : 1}')
-        def sort = BsonDocument.parse('{ sort : 1}')
-        def projection = BsonDocument.parse('{ projection : 1}')
-        def connection = Mock(AsyncConnection) {
-            _ * getDescription() >> Stub(ConnectionDescription) {
-                getServerVersion() >> serverVersion
-            }
-        }
-        def connectionSource = Stub(AsyncConnectionSource) {
-            getConnection(_) >> { it[0].onResult(connection, null) }
-        }
-        def writeBinding = Stub(AsyncWriteBinding) {
-            getWriteConnectionSource(_) >> { it[0].onResult(connectionSource, null) }
-        }
-        def operation = new FindAndUpdateOperation<Document>(getNamespace(), writeConcern, documentCodec, update)
-        def expectedCommand = new BsonDocument('findandmodify', new BsonString(getNamespace().getCollectionName()))
-                .append('update', update)
-        if (includeWriteConcern) {
-            expectedCommand.put('writeConcern', writeConcern.asDocument())
-        }
+        CollectionHelper<Document> helper = new CollectionHelper<Document>(documentCodec, getNamespace())
+        Document pete = new Document('name', 'Pete').append('numberOfJobs', 3)
+        Document sam = new Document('name', 'Sam').append('numberOfJobs', 5)
+
+        helper.insertDocuments(new DocumentCodec(), pete, sam)
 
         when:
-        operation.executeAsync(writeBinding, Stub(SingleResultCallback))
+        def update = new BsonDocument('$inc', new BsonDocument('numberOfJobs', new BsonInt32(1)))
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, true, documentCodec, update)
+                .filter(new BsonDocument('name', new BsonString('Pete')))
+
+        enableOnPrimaryTransactionalWriteFailPoint(BsonDocument.parse('{times: 1}'))
+
+        Document returnedDocument = executeWithSession(operation, async)
 
         then:
-        1 * connection.commandAsync(getNamespace().getDatabaseName(), expectedCommand, _, _, _, _) >> { it[5].onResult(cannedResult, null) }
-        1 * connection.release()
+        returnedDocument.getInteger('numberOfJobs') == 3
+        helper.find().size() == 2;
+        helper.find().get(0).getInteger('numberOfJobs') == 4
 
-        when:
-        operation.filter(filter)
-                .sort(sort)
-                .projection(projection)
-                .bypassDocumentValidation(true)
-                .maxTime(10, TimeUnit.MILLISECONDS)
-        expectedCommand.append('query', filter)
-                .append('sort', sort)
-                .append('fields', projection)
-                .append('maxTimeMS', new BsonInt64(10))
-
-        if (includeBypassValidation) {
-            expectedCommand.append('bypassDocumentValidation', BsonBoolean.TRUE)
-        }
-
-        operation.executeAsync(writeBinding, Stub(SingleResultCallback))
-
-        then:
-        1 * connection.commandAsync(getNamespace().getDatabaseName(), expectedCommand, _, _, _, _) >> { it[5].onResult(cannedResult, null) }
-        1 * connection.release()
+        cleanup:
+        disableOnPrimaryTransactionalWriteFailPoint()
 
         where:
-        serverVersion                | writeConcern                 | includeWriteConcern   | includeBypassValidation
-        new ServerVersion([3, 2, 0]) | WriteConcern.W1              | true                  | true
-        new ServerVersion([3, 2, 0]) | WriteConcern.ACKNOWLEDGED    | false                 | true
-        new ServerVersion([3, 2, 0]) | WriteConcern.UNACKNOWLEDGED  | false                 | true
-        new ServerVersion([3, 0, 0]) | WriteConcern.ACKNOWLEDGED    | false                 | false
-        new ServerVersion([3, 0, 0]) | WriteConcern.UNACKNOWLEDGED  | false                 | false
-        new ServerVersion([3, 0, 0]) | WriteConcern.W1              | false                 | false
+        async << [true, false]
+    }
+
+    def 'should retry if the connection initially fails'() {
+        when:
+        def cannedResult = new BsonDocument('value', new BsonDocumentWrapper(BsonDocument.parse('{}'), new BsonDocumentCodec()))
+        def update = BsonDocument.parse('{ update: 1}')
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, true, documentCodec, update)
+        def expectedCommand = new BsonDocument('findAndModify', new BsonString(getNamespace().getCollectionName()))
+                .append('update', update)
+                .append('txnNumber', new BsonInt64(0))
+                .append('new', BsonBoolean.FALSE)
+
+        then:
+        testOperationRetries(operation, [3, 6, 0], expectedCommand, async, cannedResult)
+
+        where:
+        async << [true, false]
+    }
+
+    def 'should throw original error when retrying and failing'() {
+        given:
+        def update = BsonDocument.parse('{ update: 1}')
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, true, documentCodec, update)
+        def originalException = new MongoSocketException('Some failure', new ServerAddress())
+
+        when:
+        testRetryableOperationThrowsOriginalError(operation, [[3, 6, 0], [3, 4, 0]],
+                [REPLICA_SET_PRIMARY, REPLICA_SET_PRIMARY], originalException, async)
+
+        then:
+        Exception commandException = thrown()
+        commandException == originalException
+
+        when:
+        testRetryableOperationThrowsOriginalError(operation, [[3, 6, 0], [3, 6, 0]],
+                [REPLICA_SET_PRIMARY, STANDALONE], originalException, async)
+
+        then:
+        commandException = thrown()
+        commandException == originalException
+
+        when:
+        testRetryableOperationThrowsOriginalError(operation, [[3, 6, 0]],
+                [REPLICA_SET_PRIMARY], originalException, async)
+
+        then:
+        commandException = thrown()
+        commandException == originalException
+
+        where:
+        async << [true, false]
+    }
+
+    def 'should throw an exception when passing an unsupported collation'() {
+        given:
+        def update = BsonDocument.parse('{ $set: {x: 1}}')
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, false, documentCodec, update)
+                .collation(defaultCollation)
+
+        when:
+        testOperationThrows(operation, [3, 2, 0], async)
+
+        then:
+        def exception = thrown(IllegalArgumentException)
+        exception.getMessage().startsWith('Collation not supported by server version:')
+
+        where:
+        async << [false, false]
+    }
+
+    @IgnoreIf({ !serverVersionAtLeast(3, 4) })
+    def 'should support collation'() {
+        given:
+        def document = Document.parse('{_id: 1, str: "foo"}')
+        getCollectionHelper().insertDocuments(document)
+        def update = BsonDocument.parse('{ $set: {str: "bar"}}')
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, false, documentCodec, update)
+                .filter(BsonDocument.parse('{str: "FOO"}'))
+                .collation(caseInsensitiveCollation)
+
+        when:
+        def result = execute(operation, async)
+
+        then:
+        result == document
+
+        where:
+        async << [true, false]
+    }
+
+    @IgnoreIf({ !serverVersionAtLeast(3, 6) })
+    def 'should support array filters'() {
+        given:
+        def documentOne = Document.parse('{_id: 1, y: [ {b: 3}, {b: 1}]}')
+        def documentTwo = Document.parse('{_id: 2, y: [ {b: 0}, {b: 1}]}')
+        getCollectionHelper().insertDocuments(documentOne, documentTwo)
+        def update = BsonDocument.parse('{ $set: {"y.$[i].b": 2}}')
+        def arrayFilters = [BsonDocument.parse('{"i.b": 3}')]
+        def operation = new FindAndUpdateOperation<Document>(getNamespace(), ACKNOWLEDGED, false, documentCodec, update)
+                .returnOriginal(false)
+                .arrayFilters(arrayFilters)
+
+        when:
+        def result = execute(operation, async)
+
+        then:
+        result == Document.parse('{_id: 1, y: [ {b: 2}, {b: 1}]}')
+
+        where:
+        async << [true, false]
     }
 }

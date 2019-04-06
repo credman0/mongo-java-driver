@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import static com.mongodb.assertions.Assertions.notNull;
  *
  * @since 3.0
  */
+@Deprecated
 public class ReadPreferenceServerSelector implements ServerSelector {
     private final ReadPreference readPreference;
 

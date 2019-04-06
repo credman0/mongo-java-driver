@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@
 
 package com.mongodb.bulk;
 
+import com.mongodb.client.model.Collation;
 import org.bson.BsonDocument;
+
+import java.util.List;
 
 import static com.mongodb.assertions.Assertions.notNull;
 
@@ -25,12 +28,15 @@ import static com.mongodb.assertions.Assertions.notNull;
  *
  * @since 3.0
  */
+@Deprecated
 public final class UpdateRequest extends WriteRequest {
     private final BsonDocument update;
     private final Type updateType;
     private final BsonDocument filter;
     private boolean isMulti = true;
     private boolean isUpsert = false;
+    private Collation collation;
+    private List<BsonDocument> arrayFilters;
 
     /**
      * Construct a new instance.
@@ -111,6 +117,55 @@ public final class UpdateRequest extends WriteRequest {
     public UpdateRequest upsert(final boolean isUpsert) {
         this.isUpsert = isUpsert;
         return this;
+    }
+
+    /**
+     * Returns the collation options
+     *
+     * @return the collation options
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public Collation getCollation() {
+        return collation;
+    }
+
+    /**
+     * Sets the collation options
+     *
+     * <p>A null value represents the server default.</p>
+     * @param collation the collation options to use
+     * @return this
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public UpdateRequest collation(final Collation collation) {
+        this.collation = collation;
+        return this;
+    }
+
+    /**
+     * Sets the array filters option
+     *
+     * @param arrayFilters the array filters, which may be null
+     * @return this
+     * @since 3.6
+     * @mongodb.server.release 3.6
+     */
+    public UpdateRequest arrayFilters(final List<BsonDocument> arrayFilters) {
+        this.arrayFilters = arrayFilters;
+        return this;
+    }
+
+    /**
+     * Returns the array filters option
+     *
+     * @return the array filters, which may be null
+     * @since 3.6
+     * @mongodb.server.release 3.6
+     */
+    public List<BsonDocument> getArrayFilters() {
+        return arrayFilters;
     }
 }
 

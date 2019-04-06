@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ public abstract class IndexMap {
     private static class HashBased extends IndexMap {
         private final Map<Integer, Integer> indexMap = new HashMap<Integer, Integer>();
 
-        public HashBased(final int startIndex, final int count) {
+        HashBased(final int startIndex, final int count) {
             for (int i = startIndex; i < startIndex + count; i++) {
                 indexMap.put(i - startIndex, i);
             }
@@ -98,10 +98,10 @@ public abstract class IndexMap {
         private int startIndex;
         private int count;
 
-        public RangeBased() {
+        RangeBased() {
         }
 
-        public RangeBased(final int startIndex, final int count) {
+        RangeBased(final int startIndex, final int count) {
             isTrueArgument("startIndex", startIndex >= 0);
             isTrueArgument("count", count > 0);
             this.startIndex = startIndex;

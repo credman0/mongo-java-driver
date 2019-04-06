@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static java.lang.String.format;
+import static java.nio.ByteOrder.LITTLE_ENDIAN;
 
 /**
  * A BSON output stream that stores the output in a single, un-pooled byte array.
@@ -131,7 +132,7 @@ public class BasicOutputBuffer extends OutputBuffer {
     @Override
     public List<ByteBuf> getByteBuffers() {
         ensureOpen();
-        return Arrays.<ByteBuf>asList(new ByteBufNIO(ByteBuffer.wrap(buffer, 0, position).duplicate()));
+        return Arrays.<ByteBuf>asList(new ByteBufNIO(ByteBuffer.wrap(buffer, 0, position).duplicate().order(LITTLE_ENDIAN)));
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,10 +56,20 @@ public class DocumentCodec implements CollectibleCodec<Document> {
     private final Transformer valueTransformer;
 
     /**
-     * Construct a new instance with a default {@code CodecRegistry} and
+     * Construct a new instance with a default {@code CodecRegistry}.
      */
     public DocumentCodec() {
-        this(DEFAULT_REGISTRY, DEFAULT_BSON_TYPE_CLASS_MAP);
+        this(DEFAULT_REGISTRY);
+    }
+
+    /**
+     * Construct a new instance with the given registry.
+     *
+     * @param registry         the registry
+     * @since 3.5
+     */
+    public DocumentCodec(final CodecRegistry registry) {
+        this(registry, DEFAULT_BSON_TYPE_CLASS_MAP);
     }
 
     /**
@@ -205,12 +215,9 @@ public class DocumentCodec implements CollectibleCodec<Document> {
             reader.readNull();
             return null;
         } else if (bsonType == BsonType.ARRAY) {
-           return readList(reader, decoderContext);
-        } else if (bsonType == BsonType.BINARY) {
-            byte bsonSubType = reader.peekBinarySubType();
-            if (bsonSubType == BsonBinarySubType.UUID_STANDARD.getValue() || bsonSubType == BsonBinarySubType.UUID_LEGACY.getValue()) {
-                return registry.get(UUID.class).decode(reader, decoderContext);
-            }
+            return readList(reader, decoderContext);
+        } else if (bsonType == BsonType.BINARY && BsonBinarySubType.isUuid(reader.peekBinarySubType()) && reader.peekBinarySize() == 16) {
+            return registry.get(UUID.class).decode(reader, decoderContext);
         }
         return valueTransformer.transform(bsonTypeCodecMap.get(bsonType).decode(reader, decoderContext));
     }

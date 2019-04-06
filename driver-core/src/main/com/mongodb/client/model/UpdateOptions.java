@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,11 @@
 
 package com.mongodb.client.model;
 
+import com.mongodb.lang.Nullable;
+import org.bson.conversions.Bson;
+
+import java.util.List;
+
 /**
  * The options to apply when updating documents.
  *
@@ -27,6 +32,8 @@ package com.mongodb.client.model;
 public class UpdateOptions {
     private boolean upsert;
     private Boolean bypassDocumentValidation;
+    private Collation collation;
+    private List<? extends Bson> arrayFilters;
 
     /**
      * Returns true if a new document should be inserted if there are no matches to the query filter.  The default is false.
@@ -55,6 +62,7 @@ public class UpdateOptions {
      * @since 3.2
      * @mongodb.server.release 3.2
      */
+    @Nullable
     public Boolean getBypassDocumentValidation() {
         return bypassDocumentValidation;
     }
@@ -67,8 +75,69 @@ public class UpdateOptions {
      * @since 3.2
      * @mongodb.server.release 3.2
      */
-    public UpdateOptions bypassDocumentValidation(final Boolean bypassDocumentValidation) {
+    public UpdateOptions bypassDocumentValidation(@Nullable final Boolean bypassDocumentValidation) {
         this.bypassDocumentValidation = bypassDocumentValidation;
         return this;
+    }
+
+    /**
+     * Returns the collation options
+     *
+     * @return the collation options
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    @Nullable
+    public Collation getCollation() {
+        return collation;
+    }
+
+    /**
+     * Sets the collation options
+     *
+     * <p>A null value represents the server default.</p>
+     * @param collation the collation options to use
+     * @return this
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public UpdateOptions collation(@Nullable final Collation collation) {
+        this.collation = collation;
+        return this;
+    }
+
+    /**
+     * Sets the array filters option
+     *
+     * @param arrayFilters the array filters, which may be null
+     * @return this
+     * @since 3.6
+     * @mongodb.server.release 3.6
+     */
+    public UpdateOptions arrayFilters(@Nullable final List<? extends Bson> arrayFilters) {
+        this.arrayFilters = arrayFilters;
+        return this;
+    }
+
+    /**
+     * Returns the array filters option
+     *
+     * @return the array filters, which may be null
+     * @since 3.6
+     * @mongodb.server.release 3.6
+     */
+    @Nullable
+    public List<? extends Bson> getArrayFilters() {
+        return arrayFilters;
+    }
+
+    @Override
+    public String toString() {
+        return "UpdateOptions{"
+                + "upsert=" + upsert
+                + ", bypassDocumentValidation=" + bypassDocumentValidation
+                + ", collation=" + collation
+                + ", arrayFilters=" + arrayFilters
+                + '}';
     }
 }

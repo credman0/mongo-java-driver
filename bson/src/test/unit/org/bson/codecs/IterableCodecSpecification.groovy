@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -7,12 +7,11 @@
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.bson.codecs
@@ -20,6 +19,7 @@ package org.bson.codecs
 import org.bson.BsonDocument
 import org.bson.BsonDocumentReader
 import org.bson.BsonDocumentWriter
+import org.bson.types.Binary
 import spock.lang.Specification
 
 import static org.bson.BsonDocument.parse
@@ -68,6 +68,21 @@ class IterableCodecSpecification extends Specification {
         iterable == [1, 2, 3, null]
     }
 
+    def 'should decode a BSON array of arrays to an Iterable of Iterables'() {
+        given:
+        def codec = new IterableCodec(REGISTRY, new BsonTypeClassMap())
+        def reader = new BsonDocumentReader(parse('{array : [[1, 2], [3, 4, 5]]}'))
+
+        when:
+        reader.readStartDocument()
+        reader.readName('array')
+        def iterable = codec.decode(reader, DecoderContext.builder().build())
+        reader.readEndDocument()
+
+        then:
+        iterable == [[1, 2], [3, 4, 5]]
+    }
+
     def 'should use provided transformer'() {
         given:
         def codec = new IterableCodec(REGISTRY, new BsonTypeClassMap(), { Object from ->
@@ -85,10 +100,10 @@ class IterableCodecSpecification extends Specification {
         iterable == ['1', '2', '3']
     }
 
-    def 'should decode a BSON Binary with subtype of UIID_LEGACY to a UUID'() {
+    def 'should decode binary subtypes for UUID'() {
         given:
         def codec = new IterableCodec(REGISTRY, new BsonTypeClassMap(), null)
-        def reader = new BsonDocumentReader(parse('{array : [{ "$binary" : "D0dqZ20GeYvWzXdt0gkSlA==", "$type" : "3" }]}'))
+        def reader = new BsonDocumentReader(parse(document))
 
         when:
         reader.readStartDocument()
@@ -97,22 +112,14 @@ class IterableCodecSpecification extends Specification {
         reader.readEndDocument()
 
         then:
-        iterable == [UUID.fromString('8b79066d-676a-470f-9412-09d26d77cdd6')]
-    }
+        iterable == value
 
-    def 'should decode a BSON Binary with subtype of UIID_STANDARD to a UUID'() {
-        given:
-        def codec = new IterableCodec(REGISTRY, new BsonTypeClassMap(), null)
-        def reader = new BsonDocumentReader(parse('{array : [{ "$binary" : "i3kGbWdqRw+UEgnSbXfN1g==", "$type" : "4" }]}'))
-
-        when:
-        reader.readStartDocument()
-        reader.readName('array')
-        def iterable = codec.decode(reader, DecoderContext.builder().build())
-        reader.readEndDocument()
-
-        then:
-        iterable == [UUID.fromString('8b79066d-676a-470f-9412-09d26d77cdd6')]
+        where:
+        document                                                                 | value
+        '{"array": [{ "$binary" : "c3QL", "$type" : "3" }]}'                     | [new Binary((byte) 0x03, (byte[]) [115, 116, 11])]
+        '{"array": [{ "$binary" : "c3QL", "$type" : "4" }]}'                     | [new Binary((byte) 0x04, (byte[]) [115, 116, 11])]
+        '{"array": [{ "$binary" : "AQIDBAUGBwgJCgsMDQ4PEA==", "$type" : "3" }]}' | [UUID.fromString('08070605-0403-0201-100f-0e0d0c0b0a09')]
+        '{"array": [{ "$binary" : "CAcGBQQDAgEQDw4NDAsKCQ==", "$type" : "3" }]}' | [UUID.fromString('01020304-0506-0708-090a-0b0c0d0e0f10')]
     }
 
 }

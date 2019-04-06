@@ -1,11 +1,11 @@
 /*
- * Copyright 2015-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,7 @@
 
 package com.mongodb;
 
+import com.mongodb.lang.Nullable;
 import org.bson.BsonDocument;
 import org.bson.BsonString;
 
@@ -29,15 +30,15 @@ import static com.mongodb.assertions.Assertions.notNull;
  * @since 3.2
  */
 public final class ReadConcern {
-    private final ReadConcernLevel readConcernLevel;
+    private final ReadConcernLevel level;
 
     /**
      * Construct a new read concern
      *
-     * @param readConcernLevel the read concern level
+     * @param level the read concern level
      */
-    public ReadConcern(final ReadConcernLevel readConcernLevel) {
-        this.readConcernLevel = notNull("readConcernLevel", readConcernLevel);
+    public ReadConcern(final ReadConcernLevel level) {
+        this.level = notNull("level", level);
     }
 
     /**
@@ -67,12 +68,38 @@ public final class ReadConcern {
      */
     public static final ReadConcern LINEARIZABLE = new ReadConcern(ReadConcernLevel.LINEARIZABLE);
 
+    /**
+     * The snapshot read concern.
+     *
+     * @since 3.8
+     * @mongodb.server.release 4.0
+     */
+    public static final ReadConcern SNAPSHOT = new ReadConcern(ReadConcernLevel.SNAPSHOT);
+
+    /**
+     * The available read concern.
+     *
+     * @since 3.9
+     * @mongodb.server.release 3.6
+     */
+    public static final ReadConcern AVAILABLE = new ReadConcern(ReadConcernLevel.AVAILABLE);
+
+    /**
+     * Gets the read concern level.
+     *
+     * @return the read concern level, which may be null (which indicates to use the server's default level)
+     * @since 3.6
+     */
+    @Nullable
+    public ReadConcernLevel getLevel() {
+        return level;
+    }
 
     /**
      * @return true if this is the server default read concern
      */
     public boolean isServerDefault() {
-        return readConcernLevel == null;
+        return level == null;
     }
 
     /**
@@ -82,8 +109,8 @@ public final class ReadConcern {
      */
     public BsonDocument asDocument() {
         BsonDocument readConcern = new BsonDocument();
-        if (!isServerDefault()){
-            readConcern.put("level", new BsonString(readConcernLevel.getValue()));
+        if (level != null) {
+            readConcern.put("level", new BsonString(level.getValue()));
         }
         return readConcern;
     }
@@ -93,25 +120,21 @@ public final class ReadConcern {
         if (this == o) {
             return true;
         }
-        if (o == null) {
+        if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        if (getClass() != o.getClass()) {
-            return false;
-        }
+
         ReadConcern that = (ReadConcern) o;
-        if (readConcernLevel != that.readConcernLevel) {
-            return false;
-        }
-        return true;
+
+        return level == that.level;
     }
 
     @Override
     public int hashCode() {
-        return readConcernLevel != null ? readConcernLevel.hashCode() : 0;
+        return level != null ? level.hashCode() : 0;
     }
 
     private ReadConcern() {
-        this.readConcernLevel = null;
+        this.level = null;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import com.mongodb.connection.AsyncConnection
 import com.mongodb.connection.Connection
 import com.mongodb.connection.ConnectionDescription
 import com.mongodb.connection.ServerVersion
+import com.mongodb.session.SessionContext
 import org.bson.BsonDocument
 import org.bson.BsonInt32
 import org.bson.BsonJavaScript
@@ -49,10 +50,9 @@ import static com.mongodb.ClusterFixture.getBinding
 import static com.mongodb.ClusterFixture.isSharded
 import static com.mongodb.ClusterFixture.loopCursor
 import static com.mongodb.ClusterFixture.serverVersionAtLeast
-import static java.util.Arrays.asList
 import static org.junit.Assert.assertTrue
 
-@IgnoreIf({ isSharded() || !serverVersionAtLeast(asList(2, 6, 0)) })
+@IgnoreIf({ isSharded() || serverVersionAtLeast(4, 1) })
 @Category(Slow)
 class ParallelCollectionScanOperationSpecification extends OperationFunctionalSpecification {
     Map<Integer, Boolean> ids = [] as ConcurrentHashMap
@@ -73,19 +73,16 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
         then:
         operation.getBatchSize() == 0
         operation.getNumCursors() == 3
-        operation.getReadConcern() == ReadConcern.DEFAULT
     }
 
     def 'should set optional values correctly'(){
         when:
         def operation = new ParallelCollectionScanOperation<Document>(getNamespace(), 3, new DocumentCodec())
             .batchSize(10)
-            .readConcern(ReadConcern.MAJORITY)
 
         then:
         operation.getBatchSize() == 10
         operation.getNumCursors() == 3
-        operation.getReadConcern() == ReadConcern.MAJORITY
     }
 
     def 'should visit all documents'() {
@@ -132,6 +129,10 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
         def readBinding = Stub(ReadBinding) {
             getReadConnectionSource() >> connectionSource
             getReadPreference() >> readPreference
+            getSessionContext() >> Stub(SessionContext) {
+                hasActiveTransaction() >> false
+                getReadConcern() >> ReadConcern.DEFAULT
+            }
         }
         def operation = new ParallelCollectionScanOperation<Document>(helper.namespace, 2, helper.decoder)
 
@@ -140,7 +141,7 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
 
         then:
         _ * connection.getDescription() >> helper.connectionDescription
-        1 * connection.command(helper.dbName, _, readPreference.isSlaveOk(), _, _) >> helper.commandResult
+        1 * connection.command(helper.dbName, _, _, readPreference, _, _) >> helper.commandResult
         1 * connection.release()
 
         where:
@@ -156,6 +157,10 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
         def readBinding = Stub(AsyncReadBinding) {
             getReadPreference() >> readPreference
             getReadConnectionSource(_) >> { it[0].onResult(connectionSource, null) }
+            getSessionContext() >> Stub(SessionContext) {
+                hasActiveTransaction() >> false
+                getReadConcern() >> ReadConcern.DEFAULT
+            }
         }
         def operation = new ParallelCollectionScanOperation<Document>(helper.namespace, 2, helper.decoder)
 
@@ -164,8 +169,8 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
 
         then:
         _ * connection.getDescription() >> helper.connectionDescription
-        1 * connection.commandAsync(helper.dbName, _, readPreference.isSlaveOk(), _, _, _) >> {
-            it[5].onResult(helper.commandResult, null) }
+        1 * connection.commandAsync(helper.dbName, _, _, readPreference, _, _, _) >> {
+            it[6].onResult(helper.commandResult, null) }
         1 * connection.release()
 
         where:
@@ -184,6 +189,10 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
         }
         def readBinding = Stub(ReadBinding) {
             getReadConnectionSource() >> connectionSource
+            getSessionContext() >> Stub(SessionContext) {
+                hasActiveTransaction() >> false
+                getReadConcern() >> ReadConcern.DEFAULT
+            }
         }
 
         def operation = new ParallelCollectionScanOperation<Document>(helper.namespace, 2, helper.decoder)
@@ -194,17 +203,16 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
         operation.execute(readBinding)
 
         then:
-        1 * connection.command(helper.dbName, expectedCommand, _, _, _) >> { helper.commandResult }
+        1 * connection.command(helper.dbName, expectedCommand, _, _, _, _) >> { helper.commandResult }
         1 * connection.release()
 
         when:
-        operation.batchSize(10).readConcern(ReadConcern.MAJORITY)
-        expectedCommand.append('readConcern', new BsonDocument('level', new BsonString('majority')))
+        operation.batchSize(10)
 
         operation.execute(readBinding)
 
         then:
-        1 * connection.command(helper.dbName, expectedCommand, _, _, _) >> { helper.commandResult }
+        1 * connection.command(helper.dbName, expectedCommand, _, _, _, _) >> { helper.commandResult }
         1 * connection.release()
     }
 
@@ -220,6 +228,10 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
         }
         def readBinding = Stub(AsyncReadBinding) {
             getReadConnectionSource(_) >> { it[0].onResult(connectionSource, null) }
+            getSessionContext() >> Stub(SessionContext) {
+                hasActiveTransaction() >> false
+                getReadConcern() >> ReadConcern.DEFAULT
+            }
         }
         def operation = new ParallelCollectionScanOperation<Document>(helper.namespace, 2, helper.decoder)
         def expectedCommand = new BsonDocument('parallelCollectionScan', new BsonString(helper.namespace.getCollectionName()))
@@ -229,17 +241,16 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
         operation.executeAsync(readBinding, Stub(SingleResultCallback))
 
         then:
-        1 * connection.commandAsync(helper.dbName, expectedCommand, _, _, _, _) >> { it[5].onResult(helper.commandResult, null) }
+        1 * connection.commandAsync(helper.dbName, expectedCommand, _, _, _, _, _) >> { it[6].onResult(helper.commandResult, null) }
         1 * connection.release()
 
         when:
-        operation.batchSize(10).readConcern(ReadConcern.MAJORITY)
-        expectedCommand.append('readConcern', new BsonDocument('level', new BsonString('majority')))
+        operation.batchSize(10)
 
         operation.executeAsync(readBinding, Stub(SingleResultCallback))
 
         then:
-        1 * connection.commandAsync(helper.dbName, expectedCommand, _, _, _, _) >> { it[5].onResult(helper.commandResult, null) }
+        1 * connection.commandAsync(helper.dbName, expectedCommand, _, _, _, _, _) >> { it[6].onResult(helper.commandResult, null) }
         1 * connection.release()
     }
 
@@ -253,9 +264,12 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
                     }
                 }
             }
+            getSessionContext() >> Stub(SessionContext) {
+                getReadConcern() >> readConcern
+            }
         }
         def operation = new MapReduceWithInlineResultsOperation<Document>(helper.namespace, new BsonJavaScript('function(){ }'),
-                new BsonJavaScript('function(key, values){ }'), helper.decoder).readConcern(readConcern)
+                new BsonJavaScript('function(key, values){ }'), helper.decoder)
 
         when:
         operation.execute(readBinding)
@@ -279,9 +293,12 @@ class ParallelCollectionScanOperationSpecification extends OperationFunctionalSp
         }
         def readBinding = Stub(AsyncReadBinding) {
             getReadConnectionSource(_) >> { it[0].onResult(connectionSource, null) }
+            getSessionContext() >> Stub(SessionContext) {
+                getReadConcern() >> readConcern
+            }
         }
         def operation = new MapReduceWithInlineResultsOperation<Document>(helper.namespace, new BsonJavaScript('function(){ }'),
-                new BsonJavaScript('function(key, values){ }'), helper.decoder).readConcern(readConcern)
+                new BsonJavaScript('function(key, values){ }'), helper.decoder)
         def callback = Mock(SingleResultCallback)
 
         when:

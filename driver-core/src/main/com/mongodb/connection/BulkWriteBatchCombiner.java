@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import static java.util.Arrays.asList;
 /**
  * This class is not part of the public API.  It may be changed or removed at any time.
  */
+@Deprecated
 public class BulkWriteBatchCombiner {
     private final ServerAddress serverAddress;
     private final boolean ordered;

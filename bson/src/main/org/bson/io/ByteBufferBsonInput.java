@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,7 +142,10 @@ public class ByteBufferBsonInput implements BsonInput {
     private String readString(final int size) {
         if (size == 2) {
             byte asciiByte = readByte();               // if only one byte in the string, it must be ascii.
-            readByte();                                // read null terminator
+            byte nullByte = readByte();                // read null terminator
+            if (nullByte != 0) {
+                throw new BsonSerializationException("Found a BSON string that is not null-terminated");
+            }
             if (asciiByte < 0) {
                 return UTF8_CHARSET.newDecoder().replacement();
             }
@@ -178,12 +181,26 @@ public class ByteBufferBsonInput implements BsonInput {
         buffer.position(buffer.position() + numBytes);
     }
 
+    @Deprecated
     @Override
     public void mark(final int readLimit) {
         ensureOpen();
         mark = buffer.position();
     }
 
+    @Override
+    public BsonInputMark getMark(final int readLimit) {
+        return new BsonInputMark() {
+            private int mark = buffer.position();
+            @Override
+            public void reset() {
+                ensureOpen();
+                buffer.position(mark);
+            }
+        };
+    }
+
+    @Deprecated
     @Override
     public void reset() {
         ensureOpen();

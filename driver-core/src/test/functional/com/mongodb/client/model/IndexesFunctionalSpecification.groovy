@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,18 +17,15 @@
 package com.mongodb.client.model
 
 import com.mongodb.OperationFunctionalSpecification
-import spock.lang.IgnoreIf
 
-import static com.mongodb.ClusterFixture.serverVersionAtLeast
 import static com.mongodb.client.model.Indexes.ascending
 import static com.mongodb.client.model.Indexes.compoundIndex
 import static com.mongodb.client.model.Indexes.descending
 import static com.mongodb.client.model.Indexes.geo2d
 import static com.mongodb.client.model.Indexes.geo2dsphere
 import static com.mongodb.client.model.Indexes.geoHaystack
-import static com.mongodb.client.model.Indexes.text
 import static com.mongodb.client.model.Indexes.hashed
-import static java.util.Arrays.asList
+import static com.mongodb.client.model.Indexes.text
 import static org.bson.BsonDocument.parse
 
 class IndexesFunctionalSpecification extends OperationFunctionalSpecification {
@@ -109,7 +106,6 @@ class IndexesFunctionalSpecification extends OperationFunctionalSpecification {
         getCollectionHelper().listIndexes()*.get('key').contains(parse('{x : "geoHaystack", b: -1}'))
     }
 
-    @IgnoreIf({ !serverVersionAtLeast(asList(2, 4, 0)) })
     def 'text'() {
         when:
         getCollectionHelper().createIndex(text('x'))
@@ -118,7 +114,14 @@ class IndexesFunctionalSpecification extends OperationFunctionalSpecification {
         getCollectionHelper().listIndexes()*.get('key').contains(parse('{_fts: "text", _ftsx: 1}'))
     }
 
-    @IgnoreIf({ !serverVersionAtLeast(asList(2, 4, 0)) })
+    def 'text wildcard'() {
+        when:
+        getCollectionHelper().createIndex(text())
+
+        then:
+        getCollectionHelper().listIndexes()*.get('key').contains(parse('{_fts: "text", _ftsx: 1}'))
+    }
+
     def 'hashed'() {
         when:
         getCollectionHelper().createIndex(hashed('x'))

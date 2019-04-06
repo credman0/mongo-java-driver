@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,6 +109,9 @@ public class NettyStreamFactoryFactory implements StreamFactoryFactory {
 
         /**
          * Sets the event loop group.
+         *
+         * <p>It is highly recommended to supply your own event loop group and manage its shutdown.  Otherwise, the event
+         * loop group created by default will not be shutdown properly.</p>
          *
          * @param eventLoopGroup the event loop group that all channels created by this factory will be a part of
          * @return this

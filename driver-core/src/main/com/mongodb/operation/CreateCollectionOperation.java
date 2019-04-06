@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import com.mongodb.WriteConcern;
 import com.mongodb.async.SingleResultCallback;
 import com.mongodb.binding.AsyncWriteBinding;
 import com.mongodb.binding.WriteBinding;
+import com.mongodb.client.model.Collation;
 import com.mongodb.client.model.ValidationAction;
 import com.mongodb.client.model.ValidationLevel;
 import com.mongodb.connection.AsyncConnection;
@@ -28,18 +29,21 @@ import com.mongodb.connection.ConnectionDescription;
 import com.mongodb.operation.OperationHelper.CallableWithConnection;
 import org.bson.BsonBoolean;
 import org.bson.BsonDocument;
+import org.bson.BsonInt32;
 import org.bson.BsonString;
 
 import static com.mongodb.assertions.Assertions.notNull;
 import static com.mongodb.internal.async.ErrorHandlingResultCallback.errorHandlingCallback;
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocol;
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocolAsync;
+import static com.mongodb.operation.DocumentHelper.putIfFalse;
 import static com.mongodb.operation.DocumentHelper.putIfNotZero;
 import static com.mongodb.operation.OperationHelper.LOGGER;
 import static com.mongodb.operation.OperationHelper.releasingCallback;
+import static com.mongodb.operation.OperationHelper.validateCollation;
 import static com.mongodb.operation.OperationHelper.withConnection;
-import static com.mongodb.operation.WriteConcernHelper.appendWriteConcernToCommand;
-import static com.mongodb.operation.WriteConcernHelper.writeConcernErrorTransformer;
+import static com.mongodb.internal.operation.WriteConcernHelper.appendWriteConcernToCommand;
+import static com.mongodb.operation.CommandOperationHelper.writeConcernErrorTransformer;
 
 /**
  * An operation to create a collection
@@ -47,6 +51,7 @@ import static com.mongodb.operation.WriteConcernHelper.writeConcernErrorTransfor
  * @since 3.0
  * @mongodb.driver.manual reference/method/db.createCollection Create Collection
  */
+@Deprecated
 public class CreateCollectionOperation implements AsyncWriteOperation<Void>, WriteOperation<Void> {
     private final String databaseName;
     private final String collectionName;
@@ -61,6 +66,7 @@ public class CreateCollectionOperation implements AsyncWriteOperation<Void>, Wri
     private BsonDocument validator;
     private ValidationLevel validationLevel = null;
     private ValidationAction validationAction = null;
+    private Collation collation = null;
 
     /**
      * Construct a new instance.
@@ -197,7 +203,9 @@ public class CreateCollectionOperation implements AsyncWriteOperation<Void>, Wri
      * @return usePowerOf2Sizes became the default allocation strategy
      * @mongodb.driver.manual reference/command/collMod/#usePowerOf2Sizes usePowerOf2Sizes
      * @mongodb.server.release 2.6
+     * @deprecated As of MongoDB 3.0, power of 2 sizes is ignored by the MongoDB server
      */
+    @Deprecated
     public Boolean isUsePowerOf2Sizes() {
         return usePowerOf2Sizes;
     }
@@ -211,7 +219,9 @@ public class CreateCollectionOperation implements AsyncWriteOperation<Void>, Wri
      * @return this
      * @mongodb.driver.manual reference/command/collMod/#usePowerOf2Sizes usePowerOf2Sizes
      * @mongodb.server.release 2.6
+     * @deprecated As of MongoDB 3.0, power of 2 sizes is ignored by the MongoDB server
      */
+    @Deprecated
     public CreateCollectionOperation usePowerOf2Sizes(final Boolean usePowerOf2Sizes) {
         this.usePowerOf2Sizes = usePowerOf2Sizes;
         return this;
@@ -338,11 +348,37 @@ public class CreateCollectionOperation implements AsyncWriteOperation<Void>, Wri
         return this;
     }
 
+    /**
+     * Returns the collation options
+     *
+     * @return the collation options
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public Collation getCollation() {
+        return collation;
+    }
+
+    /**
+     * Sets the collation options
+     *
+     * <p>A null value represents the server default.</p>
+     * @param collation the collation options to use
+     * @return this
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public CreateCollectionOperation collation(final Collation collation) {
+        this.collation = collation;
+        return this;
+    }
+
     @Override
     public Void execute(final WriteBinding binding) {
         return withConnection(binding, new CallableWithConnection<Void>() {
             @Override
             public Void call(final Connection connection) {
+                validateCollation(connection, collation);
                 executeWrappedCommandProtocol(binding, databaseName, getCommand(connection.getDescription()), connection,
                         writeConcernErrorTransformer());
                 return null;
@@ -359,8 +395,18 @@ public class CreateCollectionOperation implements AsyncWriteOperation<Void>, Wri
                 if (t != null) {
                     errHandlingCallback.onResult(null, t);
                 } else {
-                    executeWrappedCommandProtocolAsync(binding, databaseName, getCommand(connection.getDescription()), connection,
-                            writeConcernErrorTransformer(), releasingCallback(errHandlingCallback, connection));
+                    final SingleResultCallback<Void> wrappedCallback = releasingCallback(errHandlingCallback, connection);
+                    validateCollation(connection, collation, new OperationHelper.AsyncCallableWithConnection() {
+                        @Override
+                        public void call(final AsyncConnection connection, final Throwable t) {
+                            if (t != null) {
+                                wrappedCallback.onResult(null, t);
+                            } else {
+                                executeWrappedCommandProtocolAsync(binding, databaseName, getCommand(connection.getDescription()),
+                                        connection, writeConcernErrorTransformer(), wrappedCallback);
+                            }
+                        }
+                    });
                 }
             }
         });
@@ -368,14 +414,14 @@ public class CreateCollectionOperation implements AsyncWriteOperation<Void>, Wri
 
     private BsonDocument getCommand(final ConnectionDescription description) {
         BsonDocument document = new BsonDocument("create", new BsonString(collectionName));
-        document.put("autoIndexId", BsonBoolean.valueOf(autoIndex));
+        putIfFalse(document, "autoIndexId", autoIndex);
         document.put("capped", BsonBoolean.valueOf(capped));
         if (capped) {
             putIfNotZero(document, "size", sizeInBytes);
             putIfNotZero(document, "max", maxDocuments);
         }
         if (usePowerOf2Sizes != null) {
-            document.put("usePowerOfTwoSizes", BsonBoolean.valueOf(usePowerOf2Sizes));
+            document.put("flags", new BsonInt32(1));
         }
         if (storageEngineOptions != null) {
             document.put("storageEngine", storageEngineOptions);
@@ -393,6 +439,9 @@ public class CreateCollectionOperation implements AsyncWriteOperation<Void>, Wri
             document.put("validationAction", new BsonString(validationAction.getValue()));
         }
         appendWriteConcernToCommand(writeConcern, document, description);
+        if (collation != null) {
+            document.put("collation", collation.asDocument());
+        }
         return document;
     }
 

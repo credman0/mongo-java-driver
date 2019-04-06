@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,6 +18,8 @@ package com.mongodb.async.client.gridfs;
 
 import com.mongodb.async.client.MongoIterable;
 import com.mongodb.client.gridfs.model.GridFSFile;
+import com.mongodb.client.model.Collation;
+import com.mongodb.lang.Nullable;
 import org.bson.conversions.Bson;
 
 import java.util.concurrent.TimeUnit;
@@ -26,7 +28,9 @@ import java.util.concurrent.TimeUnit;
  * Iterable for the GridFS Files Collection.
  *
  * @since 3.3
+ * @deprecated Prefer the Reactive Streams-based asynchronous driver (mongodb-driver-reactivestreams artifactId)
  */
+@Deprecated
 public interface GridFSFindIterable extends MongoIterable<GridFSFile> {
 
     /**
@@ -44,7 +48,7 @@ public interface GridFSFindIterable extends MongoIterable<GridFSFile> {
      * @mongodb.driver.manual reference/method/db.collection.find/ Filter
      * @see com.mongodb.client.model.Filters
      */
-    GridFSFindIterable filter(Bson filter);
+    GridFSFindIterable filter(@Nullable Bson filter);
 
     /**
      * Sets the limit to apply.
@@ -71,7 +75,7 @@ public interface GridFSFindIterable extends MongoIterable<GridFSFile> {
      * @return this
      * @mongodb.driver.manual reference/method/cursor.sort/ Sort
      */
-    GridFSFindIterable sort(Bson sort);
+    GridFSFindIterable sort(@Nullable Bson sort);
 
     /**
      * The server normally times out idle cursors after an inactivity period (10 minutes)
@@ -101,4 +105,15 @@ public interface GridFSFindIterable extends MongoIterable<GridFSFile> {
      */
     @Override
     GridFSFindIterable batchSize(int batchSize);
+
+    /**
+     * Sets the collation options
+     *
+     * <p>A null value represents the server default.</p>
+     * @param collation the collation options to use
+     * @return this
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    GridFSFindIterable collation(@Nullable Collation collation);
 }

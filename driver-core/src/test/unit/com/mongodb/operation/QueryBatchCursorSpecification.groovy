@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,13 @@
 package com.mongodb.operation
 
 import com.mongodb.MongoNamespace
+import com.mongodb.MongoSocketException
+import com.mongodb.MongoSocketOpenException
 import com.mongodb.ServerAddress
 import com.mongodb.binding.ConnectionSource
 import com.mongodb.connection.Connection
 import com.mongodb.connection.ConnectionDescription
 import com.mongodb.connection.QueryResult
-import com.mongodb.connection.ServerVersion
 import org.bson.BsonDocument
 import org.bson.BsonInt32
 import org.bson.BsonInt64
@@ -36,7 +37,7 @@ class QueryBatchCursorSpecification extends Specification {
         given:
         def connection = Mock(Connection) {
             _ * getDescription() >> Stub(ConnectionDescription) {
-                getServerVersion() >> new ServerVersion([3, 2, 0])
+                getMaxWireVersion() >> 4
             }
         }
         def connectionSource = Stub(ConnectionSource) {
@@ -71,7 +72,7 @@ class QueryBatchCursorSpecification extends Specification {
         cursor.hasNext()
 
         then:
-        1 * connection.command(database, expectedCommand, _, _, _) >> {
+        1 * connection.command(database, expectedCommand, _, _, _, _) >> {
             reply
         }
         1 * connection.release()
@@ -81,5 +82,63 @@ class QueryBatchCursorSpecification extends Specification {
         0          | 0          | null
         2          | 0          | null
         0          | 100        | 100
+    }
+
+    def 'should handle exceptions when closing'() {
+        given:
+        def serverAddress = new ServerAddress()
+        def connection = Mock(Connection) {
+            _ * getDescription() >> Stub(ConnectionDescription) {
+                getMaxWireVersion() >> 4
+            }
+            _ * killCursor(_, _) >> { throw new MongoSocketException('No MongoD', serverAddress) }
+            _ * command(_, _, _, _, _) >> { throw new MongoSocketException('No MongoD', serverAddress) }
+        }
+        def connectionSource = Stub(ConnectionSource) {
+            getConnection() >> { connection }
+        }
+        connectionSource.retain() >> connectionSource
+
+        def namespace = new MongoNamespace('test', 'QueryBatchCursorSpecification')
+        def firstBatch = new QueryResult(namespace, [], 42, serverAddress)
+        def cursor = new QueryBatchCursor<Document>(firstBatch, 0, 2, 100, new BsonDocumentCodec(), connectionSource, connection)
+
+        when:
+        cursor.close()
+
+        then:
+        notThrown(MongoSocketException)
+
+        when:
+        cursor.close()
+
+        then:
+        notThrown(Exception)
+    }
+
+    def 'should handle exceptions when killing cursor and a connection can not be obtained'() {
+        given:
+        def serverAddress = new ServerAddress()
+        def connection = Mock(Connection)
+        def connectionSource = Stub(ConnectionSource) {
+            getConnection() >> { throw new MongoSocketOpenException("can't open socket", serverAddress, new IOException()) }
+        }
+        connectionSource.retain() >> connectionSource
+
+        def namespace = new MongoNamespace('test', 'QueryBatchCursorSpecification')
+        def firstBatch = new QueryResult(namespace, [], 42, serverAddress)
+        def cursor = new QueryBatchCursor<Document>(firstBatch, 0, 2, 100, new BsonDocumentCodec(), connectionSource, connection)
+
+        when:
+        cursor.close()
+
+        then:
+        notThrown(MongoSocketException)
+
+        when:
+        cursor.close()
+
+        then:
+        notThrown(Exception)
     }
 }

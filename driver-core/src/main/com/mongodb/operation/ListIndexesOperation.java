@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ import static com.mongodb.operation.OperationHelper.createEmptyBatchCursor;
 import static com.mongodb.operation.OperationHelper.cursorDocumentToAsyncBatchCursor;
 import static com.mongodb.operation.OperationHelper.cursorDocumentToBatchCursor;
 import static com.mongodb.operation.OperationHelper.releasingCallback;
-import static com.mongodb.operation.OperationHelper.serverIsAtLeastVersionThreeDotZero;
+import static com.mongodb.internal.operation.ServerVersionHelper.serverIsAtLeastVersionThreeDotZero;
 import static com.mongodb.operation.OperationHelper.withConnection;
 
 /**
@@ -66,6 +66,7 @@ import static com.mongodb.operation.OperationHelper.withConnection;
  * @since 3.0
  * @mongodb.driver.manual reference/command/listIndexes/ List indexes
  */
+@Deprecated
 public class ListIndexesOperation<T> implements AsyncReadOperation<AsyncBatchCursor<T>>, ReadOperation<BatchCursor<T>> {
     private final MongoNamespace namespace;
     private final Decoder<T> decoder;
@@ -206,7 +207,7 @@ public class ListIndexesOperation<T> implements AsyncReadOperation<AsyncBatchCur
     }
 
     private AsyncBatchCursor<T> emptyAsyncCursor(final AsyncConnectionSource source) {
-        return createEmptyAsyncBatchCursor(namespace, decoder, source.getServerDescription().getAddress(), batchSize);
+        return createEmptyAsyncBatchCursor(namespace, source.getServerDescription().getAddress());
     }
 
     private BsonDocument asQueryDocument(final ConnectionDescription connectionDescription, final ReadPreference readPreference) {
@@ -226,7 +227,7 @@ public class ListIndexesOperation<T> implements AsyncReadOperation<AsyncBatchCur
 
     private BsonDocument getCommand() {
         BsonDocument command = new BsonDocument("listIndexes", new BsonString(namespace.getCollectionName()))
-                .append("cursor", getCursorDocumentFromBatchSize(batchSize));
+                .append("cursor", getCursorDocumentFromBatchSize(batchSize == 0 ? null : batchSize));
         if (maxTimeMS > 0) {
             command.put("maxTimeMS", new BsonInt64(maxTimeMS));
         }

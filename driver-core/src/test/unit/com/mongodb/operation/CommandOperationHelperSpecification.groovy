@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package com.mongodb.operation
 
 import com.mongodb.MongoCommandException
+import com.mongodb.MongoWriteConcernException
+import com.mongodb.ReadConcern
 import com.mongodb.ReadPreference
 import com.mongodb.ServerAddress
 import com.mongodb.async.SingleResultCallback
@@ -29,17 +31,25 @@ import com.mongodb.binding.WriteBinding
 import com.mongodb.connection.AsyncConnection
 import com.mongodb.connection.Connection
 import com.mongodb.connection.ConnectionDescription
+import com.mongodb.connection.ServerDescription
+import com.mongodb.connection.ServerType
+import com.mongodb.internal.validator.NoOpFieldNameValidator
+import com.mongodb.session.SessionContext
 import org.bson.BsonBoolean
 import org.bson.BsonDocument
 import org.bson.BsonInt32
 import org.bson.BsonString
+import org.bson.codecs.BsonDocumentCodec
 import org.bson.codecs.Decoder
 import spock.lang.Specification
 
+import static com.mongodb.ReadPreference.primary
+import static com.mongodb.operation.CommandOperationHelper.executeRetryableCommand
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocol
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocolAsync
 import static com.mongodb.operation.CommandOperationHelper.isNamespaceError
 import static com.mongodb.operation.CommandOperationHelper.rethrowIfNotNamespaceError
+import static com.mongodb.operation.OperationUnitSpecification.getMaxWireVersionForServerVersion
 
 class CommandOperationHelperSpecification extends Specification {
 
@@ -104,7 +114,7 @@ class CommandOperationHelperSpecification extends Specification {
                                                              new ServerAddress()), 'some value') == 'some value'
     }
 
-    def 'should set slaveOK to false when using WriteBinding'() {
+    def 'should set read preference to primary to false when using WriteBinding'() {
         given:
         def dbName = 'db'
         def command = new BsonDocument()
@@ -124,11 +134,107 @@ class CommandOperationHelperSpecification extends Specification {
 
         then:
         _ * connection.getDescription() >> connectionDescription
-        1 * connection.command(dbName, command, false, _, decoder)
+        1 * connection.command(dbName, command, _, primary(), decoder, _)
         1 * connection.release()
     }
 
-    def 'should use the ReadBindings readPreference to set slaveOK'() {
+    def 'should retry with retryable exception'() {
+        given:
+        def dbName = 'db'
+        def command = BsonDocument.parse('''{findAndModify: "coll", query: {a: 1}, new: false, update: {$inc: {a :1}}, txnNumber: 1}''')
+        def commandCreator = { serverDescription, connectionDescription -> command }
+        def decoder = new BsonDocumentCodec()
+        def results = [
+            BsonDocument.parse('{ok: 1.0, writeConcernError: {code: 91, errmsg: "Replication is being shut down"}}'),
+            BsonDocument.parse('{ok: 1.0, writeConcernError: {code: -1, errmsg: "UnknownError"}}')] as Queue
+        def connection = Mock(Connection) {
+            _ * release()
+            _ * getDescription() >> Stub(ConnectionDescription) {
+                getMaxWireVersion() >> getMaxWireVersionForServerVersion([4, 0, 0])
+                getServerType() >> ServerType.REPLICA_SET_PRIMARY
+            }
+        }
+        def connectionSource = Stub(ConnectionSource) {
+            _ * getConnection() >> connection
+            _ * getServerDescription() >> Stub(ServerDescription) {
+                getLogicalSessionTimeoutMinutes() >> 1
+            }
+        }
+        def writeBinding = Stub(WriteBinding) {
+            getWriteConnectionSource() >> connectionSource
+            getSessionContext() >> Stub(SessionContext) {
+                hasSession() >> true
+                hasActiveTransaction() >> false
+                getReadConcern() >> ReadConcern.DEFAULT
+            }
+        }
+
+        when:
+        executeRetryableCommand(writeBinding, dbName, primary(), new NoOpFieldNameValidator(), decoder, commandCreator,
+                FindAndModifyHelper.transformer())
+
+        then:
+        2 * connection.command(dbName, command, _, primary(), decoder, _) >> { results.poll() }
+
+        then:
+        def ex = thrown(MongoWriteConcernException)
+        ex.writeConcernError.code == -1
+    }
+
+    def 'should retry with retryable exception async'() {
+        given:
+        def dbName = 'db'
+        def command = BsonDocument.parse('''{findAndModify: "coll", query: {a: 1}, new: false, update: {$inc: {a :1}}, txnNumber: 1}''')
+        def commandCreator = { serverDescription, connectionDescription -> command }
+        def callback = new SingleResultCallback() {
+            def result
+            def throwable
+            @Override
+            void onResult(final Object result, final Throwable t) {
+                this.result = result
+                this.throwable = t
+            }
+        }
+        def decoder = new BsonDocumentCodec()
+        def results = [
+                BsonDocument.parse('{ok: 1.0, writeConcernError: {code: 91, errmsg: "Replication is being shut down"}}'),
+                BsonDocument.parse('{ok: 1.0, writeConcernError: {code: -1, errmsg: "UnknownError"}}')] as Queue
+
+        def connection = Mock(AsyncConnection) {
+            _ * getDescription() >> Stub(ConnectionDescription) {
+                getMaxWireVersion() >> getMaxWireVersionForServerVersion([4, 0, 0])
+                getServerType() >> ServerType.REPLICA_SET_PRIMARY
+            }
+        }
+
+        def connectionSource = Stub(AsyncConnectionSource) {
+            getConnection(_) >> { it[0].onResult(connection, null) }
+            _ * getServerDescription() >> Stub(ServerDescription) {
+                getLogicalSessionTimeoutMinutes() >> 1
+            }
+        }
+        def asyncWriteBinding = Stub(AsyncWriteBinding) {
+            getWriteConnectionSource(_) >> { it[0].onResult(connectionSource, null) }
+            getSessionContext() >> Stub(SessionContext) {
+                hasSession() >> true
+                hasActiveTransaction() >> false
+                getReadConcern() >> ReadConcern.DEFAULT
+            }
+        }
+
+        when:
+        executeRetryableCommand(asyncWriteBinding, dbName, primary(), new NoOpFieldNameValidator(), decoder, commandCreator,
+                FindAndModifyHelper.transformer(), callback)
+
+        then:
+        2 * connection.commandAsync(dbName, command, _, primary(), decoder, _, _) >> { it.last().onResult(results.poll(), null) }
+
+        then:
+        callback.throwable instanceof MongoWriteConcernException
+        callback.throwable.writeConcernError.code == -1
+    }
+
+    def 'should use the ReadBindings readPreference'() {
         given:
         def dbName = 'db'
         def command = new BsonDocument()
@@ -149,14 +255,14 @@ class CommandOperationHelperSpecification extends Specification {
 
         then:
         _ * connection.getDescription() >> connectionDescription
-        1 * connection.command(dbName, command, readPreference.isSlaveOk(), _, decoder)
+        1 * connection.command(dbName, command, _, readPreference, decoder, _)
         1 * connection.release()
 
         where:
-        readPreference << [ReadPreference.primary(), ReadPreference.secondary()]
+        readPreference << [primary(), ReadPreference.secondary()]
     }
 
-    def 'should set slaveOK to false when using AsyncWriteBinding'() {
+    def 'should set read preference to primary to false when using AsyncWriteBinding'() {
         given:
         def dbName = 'db'
         def command = new BsonDocument()
@@ -177,11 +283,11 @@ class CommandOperationHelperSpecification extends Specification {
 
         then:
         _ * connection.getDescription() >> connectionDescription
-        1 * connection.commandAsync(dbName, command, false, _, decoder, _) >> { it[5].onResult(1, null) }
+        1 * connection.commandAsync(dbName, command, _, primary(), decoder, _, _) >> { it[6].onResult(1, null) }
         1 * connection.release()
     }
 
-    def 'should use the AsyncReadBindings readPreference to set slaveOK'() {
+    def 'should use the AsyncReadBindings readPreference'() {
         given:
         def dbName = 'db'
         def command = new BsonDocument()
@@ -203,11 +309,11 @@ class CommandOperationHelperSpecification extends Specification {
 
         then:
         _ * connection.getDescription() >> connectionDescription
-        1 * connection.commandAsync(dbName, command, readPreference.isSlaveOk(), _, decoder, _) >> { it[5].onResult(1, null) }
+        1 * connection.commandAsync(dbName, command, _, readPreference, decoder, _, _) >> { it[6].onResult(1, null) }
         1 * connection.release()
 
         where:
-        readPreference << [ReadPreference.primary(), ReadPreference.secondary()]
+        readPreference << [primary(), ReadPreference.secondary()]
     }
 
 }

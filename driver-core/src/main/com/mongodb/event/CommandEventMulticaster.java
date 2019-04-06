@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -7,12 +7,11 @@
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package com.mongodb.event;
@@ -22,12 +21,12 @@ import com.mongodb.diagnostics.logging.Logger;
 import com.mongodb.diagnostics.logging.Loggers;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static com.mongodb.assertions.Assertions.isTrue;
 import static com.mongodb.assertions.Assertions.notNull;
 import static java.lang.String.format;
+import static java.util.Collections.unmodifiableList;
 
 /**
  * A multicaster for command events. Any exception thrown by one of the listeners will be caught and not re-thrown, but may be
@@ -35,8 +34,10 @@ import static java.lang.String.format;
  *
  * @since 3.3
  *
+ * @deprecated register multiple command listeners instead
  */
 @Immutable
+@Deprecated
 public final class CommandEventMulticaster implements CommandListener {
     private static final Logger LOGGER = Loggers.getLogger("protocol.event");
 
@@ -59,7 +60,7 @@ public final class CommandEventMulticaster implements CommandListener {
      * @return the unmodifiable set of command listeners
      */
     public List<CommandListener> getCommandListeners() {
-        return Collections.unmodifiableList(commandListeners);
+        return unmodifiableList(commandListeners);
     }
 
     @Override

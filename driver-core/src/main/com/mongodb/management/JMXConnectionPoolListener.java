@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package com.mongodb.management;
 
-import com.mongodb.annotations.Beta;
 import com.mongodb.connection.ConnectionId;
 import com.mongodb.connection.ServerId;
 import com.mongodb.event.ConnectionAddedEvent;
@@ -40,9 +39,8 @@ import static java.util.Arrays.asList;
 /**
  * A connection pool listener that manages a set of JMX MBeans, one for each connection pool.
  *
- * @since 3.0
+ * @since 3.5
  */
-@Beta
 public class JMXConnectionPoolListener implements ConnectionPoolListener {
     private final ConcurrentMap<ServerId, ConnectionPoolStatistics> map =
         new ConcurrentHashMap<ServerId, ConnectionPoolStatistics>();

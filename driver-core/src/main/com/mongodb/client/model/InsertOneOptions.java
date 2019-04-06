@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,6 +15,8 @@
  */
 
 package com.mongodb.client.model;
+
+import com.mongodb.lang.Nullable;
 
 /**
  * The options to apply to an operation that inserts a single document into a collection.
@@ -32,6 +34,7 @@ public final class InsertOneOptions {
      *
      * @return the bypass document level validation flag
      */
+    @Nullable
     public Boolean getBypassDocumentValidation() {
         return bypassDocumentValidation;
     }
@@ -42,8 +45,15 @@ public final class InsertOneOptions {
      * @param bypassDocumentValidation If true, allows the write to opt-out of document level validation.
      * @return this
      */
-    public InsertOneOptions bypassDocumentValidation(final Boolean bypassDocumentValidation) {
+    public InsertOneOptions bypassDocumentValidation(@Nullable final Boolean bypassDocumentValidation) {
         this.bypassDocumentValidation = bypassDocumentValidation;
         return this;
+    }
+
+    @Override
+    public String toString() {
+        return "InsertOneOptions{"
+                + "bypassDocumentValidation=" + bypassDocumentValidation
+                + '}';
     }
 }

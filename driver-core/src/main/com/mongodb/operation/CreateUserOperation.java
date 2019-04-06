@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,10 @@ package com.mongodb.operation;
 
 import com.mongodb.MongoCommandException;
 import com.mongodb.MongoCredential;
-import com.mongodb.MongoNamespace;
 import com.mongodb.WriteConcern;
-import com.mongodb.WriteConcernResult;
 import com.mongodb.async.SingleResultCallback;
 import com.mongodb.binding.AsyncWriteBinding;
 import com.mongodb.binding.WriteBinding;
-import com.mongodb.bulk.InsertRequest;
 import com.mongodb.connection.AsyncConnection;
 import com.mongodb.connection.Connection;
 import com.mongodb.connection.ConnectionDescription;
@@ -38,21 +35,20 @@ import static com.mongodb.operation.OperationHelper.AsyncCallableWithConnection;
 import static com.mongodb.operation.OperationHelper.CallableWithConnection;
 import static com.mongodb.operation.OperationHelper.LOGGER;
 import static com.mongodb.operation.OperationHelper.releasingCallback;
-import static com.mongodb.operation.OperationHelper.serverIsAtLeastVersionTwoDotSix;
 import static com.mongodb.operation.OperationHelper.withConnection;
-import static com.mongodb.operation.UserOperationHelper.asCollectionInsertDocument;
 import static com.mongodb.operation.UserOperationHelper.asCommandDocument;
 import static com.mongodb.operation.UserOperationHelper.translateUserCommandException;
 import static com.mongodb.operation.UserOperationHelper.userCommandCallback;
-import static com.mongodb.operation.WriteConcernHelper.appendWriteConcernToCommand;
-import static com.mongodb.operation.WriteConcernHelper.writeConcernErrorTransformer;
-import static java.util.Arrays.asList;
+import static com.mongodb.internal.operation.WriteConcernHelper.appendWriteConcernToCommand;
+import static com.mongodb.operation.CommandOperationHelper.writeConcernErrorTransformer;
 
 /**
  * An operation to create a user.
  *
  * @since 3.0
+ * @deprecated use {@link CommandWriteOperation} directly or the mongod shell helpers.
  */
+@Deprecated
 public class CreateUserOperation implements AsyncWriteOperation<Void>, WriteOperation<Void> {
     private final MongoCredential credential;
     private final boolean readOnly;
@@ -63,9 +59,7 @@ public class CreateUserOperation implements AsyncWriteOperation<Void>, WriteOper
      *
      * @param credential the users credentials.
      * @param readOnly   true if the user is a readOnly user.
-     * @deprecated Prefer {@link #CreateUserOperation(MongoCredential, boolean, WriteConcern)}
      */
-    @Deprecated
     public CreateUserOperation(final MongoCredential credential, final boolean readOnly) {
         this(credential, readOnly, null);
     }
@@ -108,15 +102,11 @@ public class CreateUserOperation implements AsyncWriteOperation<Void>, WriteOper
         return withConnection(binding, new CallableWithConnection<Void>() {
             @Override
             public Void call(final Connection connection) {
-                if (serverIsAtLeastVersionTwoDotSix(connection.getDescription())) {
-                    try {
-                        executeWrappedCommandProtocol(binding, getCredential().getSource(), getCommand(connection.getDescription()),
-                                connection, writeConcernErrorTransformer());
-                    } catch (MongoCommandException e) {
-                        translateUserCommandException(e);
-                    }
-                } else {
-                    connection.insert(getNamespace(), true, WriteConcern.ACKNOWLEDGED, asList(getInsertRequest()));
+                try {
+                    executeWrappedCommandProtocol(binding, getCredential().getSource(), getCommand(connection.getDescription()),
+                            connection, writeConcernErrorTransformer());
+                } catch (MongoCommandException e) {
+                    translateUserCommandException(e);
                 }
                 return null;
             }
@@ -133,33 +123,15 @@ public class CreateUserOperation implements AsyncWriteOperation<Void>, WriteOper
                     errHandlingCallback.onResult(null, t);
                 } else {
                     final SingleResultCallback<Void> wrappedCallback = releasingCallback(errHandlingCallback, connection);
-                    if (serverIsAtLeastVersionTwoDotSix(connection.getDescription())) {
-                        executeWrappedCommandProtocolAsync(binding, credential.getSource(), getCommand(connection.getDescription()),
-                                connection, writeConcernErrorTransformer(), userCommandCallback(wrappedCallback));
-                    } else {
-                        connection.insertAsync(getNamespace(), true, WriteConcern.ACKNOWLEDGED,
-                                               asList(getInsertRequest()), new SingleResultCallback<WriteConcernResult>() {
-                            @Override
-                            public void onResult(final WriteConcernResult result, final Throwable t) {
-                                wrappedCallback.onResult(null, t);
-                            }
-                        });
-                    }
+                    executeWrappedCommandProtocolAsync(binding, credential.getSource(), getCommand(connection.getDescription()),
+                            connection, writeConcernErrorTransformer(), userCommandCallback(wrappedCallback));
                 }
             }
         });
     }
 
-    private InsertRequest getInsertRequest() {
-        return new InsertRequest(asCollectionInsertDocument(credential, readOnly));
-    }
-
-    private MongoNamespace getNamespace() {
-        return new MongoNamespace(credential.getSource(), "system.users");
-    }
-
     private BsonDocument getCommand(final ConnectionDescription description) {
-        BsonDocument commandDocument = asCommandDocument(credential, readOnly, "createUser");
+        BsonDocument commandDocument = asCommandDocument(credential, description, readOnly, "createUser");
         appendWriteConcernToCommand(writeConcern, commandDocument, description);
         return commandDocument;
     }

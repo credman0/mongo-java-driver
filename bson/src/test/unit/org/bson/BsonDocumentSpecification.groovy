@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,13 @@
 
 package org.bson
 
+import org.bson.codecs.BsonDocumentCodec
+import org.bson.codecs.DecoderContext
 import org.bson.types.Decimal128
 import org.bson.types.ObjectId
 import spock.lang.Specification
+
+import static org.bson.BsonHelper.documentWithValuesOfEveryType
 
 class BsonDocumentSpecification extends Specification {
 
@@ -322,6 +326,39 @@ class BsonDocumentSpecification extends Specification {
 
         then:
         thrown(BsonInvalidOperationException)
+    }
+
+    def 'should get first key'() {
+        given:
+        def document = new BsonDocument('i', new BsonInt32(2))
+
+        expect:
+        document.getFirstKey() == 'i'
+    }
+
+    def 'getFirstKey should throw NoSuchElementException if the document is empty'() {
+        given:
+        def document = new BsonDocument()
+
+        when:
+        document.getFirstKey()
+
+        then:
+        thrown(NoSuchElementException)
+    }
+
+    def 'should create BsonReader'() {
+        given:
+        def document = documentWithValuesOfEveryType()
+
+        when:
+        def reader = document.asBsonReader()
+
+        then:
+        new BsonDocumentCodec().decode(reader, DecoderContext.builder().build()) == document
+
+        cleanup:
+        reader.close()
     }
 
     def 'should serialize and deserialize'() {

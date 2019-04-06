@@ -1,11 +1,11 @@
 /*
- * Copyright 2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,6 +17,7 @@
 package com.mongodb.client.gridfs.codecs;
 
 import com.mongodb.client.gridfs.model.GridFSFile;
+import com.mongodb.lang.Nullable;
 import org.bson.BsonDateTime;
 import org.bson.BsonDocument;
 import org.bson.BsonDocumentReader;
@@ -65,11 +66,11 @@ public final class GridFSFileCodec implements Codec<GridFSFile> {
         BsonDocument bsonDocument = bsonDocumentCodec.decode(reader, decoderContext);
 
         BsonValue id = bsonDocument.get("_id");
-        String filename = bsonDocument.getString("filename").getValue();
+        String filename = bsonDocument.get("filename", new BsonString("")).asString().getValue();
         long length = bsonDocument.getNumber("length").longValue();
         int chunkSize = bsonDocument.getNumber("chunkSize").intValue();
         Date uploadDate = new Date(bsonDocument.getDateTime("uploadDate").getValue());
-        String md5 = bsonDocument.getString("md5").getValue();
+        String md5 = bsonDocument.containsKey("md5") ? bsonDocument.getString("md5").getValue() : null;
         BsonDocument metadataBsonDocument = bsonDocument.getDocument("metadata", new BsonDocument());
 
         Document optionalMetadata = asDocumentOrNull(metadataBsonDocument);
@@ -91,7 +92,9 @@ public final class GridFSFileCodec implements Codec<GridFSFile> {
         bsonDocument.put("length", new BsonInt64(value.getLength()));
         bsonDocument.put("chunkSize", new BsonInt32(value.getChunkSize()));
         bsonDocument.put("uploadDate", new BsonDateTime(value.getUploadDate().getTime()));
-        bsonDocument.put("md5", new BsonString(value.getMD5()));
+        if (value.getMD5() != null) {
+            bsonDocument.put("md5", new BsonString(value.getMD5()));
+        }
 
         Document metadata = value.getMetadata();
         if (metadata != null) {
@@ -111,6 +114,7 @@ public final class GridFSFileCodec implements Codec<GridFSFile> {
         return GridFSFile.class;
     }
 
+    @Nullable
     private Document asDocumentOrNull(final BsonDocument bsonDocument) {
         if (bsonDocument.isEmpty()) {
             return null;

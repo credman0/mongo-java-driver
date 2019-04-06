@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,14 @@
 
 package com.mongodb;
 
+import com.mongodb.TaggableReadPreference.NearestReadPreference;
+import com.mongodb.TaggableReadPreference.PrimaryPreferredReadPreference;
+import com.mongodb.TaggableReadPreference.SecondaryPreferredReadPreference;
+import com.mongodb.TaggableReadPreference.SecondaryReadPreference;
 import com.mongodb.annotations.Immutable;
 import com.mongodb.connection.ClusterDescription;
 import com.mongodb.connection.ServerDescription;
+import com.mongodb.lang.Nullable;
 import org.bson.BsonDocument;
 import org.bson.BsonString;
 
@@ -27,6 +32,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static com.mongodb.assertions.Assertions.notNull;
+import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 /**
@@ -81,9 +87,9 @@ public abstract class ReadPreference {
         }
     }
 
-    protected abstract List<ServerDescription> chooseForNonReplicaSet(final ClusterDescription clusterDescription);
+    protected abstract List<ServerDescription> chooseForNonReplicaSet(ClusterDescription clusterDescription);
 
-    protected abstract List<ServerDescription> chooseForReplicaSet(final ClusterDescription clusterDescription);
+    protected abstract List<ServerDescription> chooseForReplicaSet(ClusterDescription clusterDescription);
 
     /**
      * Gets a read preference that forces read to the primary.
@@ -133,14 +139,15 @@ public abstract class ReadPreference {
     /**
      * Gets a read preference that forces reads to the primary if available, otherwise to a secondary.
      *
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads primary if available.
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static ReadPreference primaryPreferred(final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.PrimaryPreferredReadPreference(Collections.<TagSet>emptyList(),
-                                                                                MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new PrimaryPreferredReadPreference(Collections.<TagSet>emptyList(), maxStaleness, timeUnit);
     }
 
     /**
@@ -151,14 +158,15 @@ public abstract class ReadPreference {
      * and selects only those secondaries whose staleness is less than or equal to maxStaleness.
      * </p>
      *
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads secondary.
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static ReadPreference secondary(final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.SecondaryReadPreference(Collections.<TagSet>emptyList(),
-                                                                         MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new SecondaryReadPreference(Collections.<TagSet>emptyList(), maxStaleness, timeUnit);
     }
 
     /**
@@ -169,14 +177,15 @@ public abstract class ReadPreference {
      * The driver estimates the staleness of each secondary, based on lastWriteDate values provided in server isMaster responses,
      * and selects only those secondaries whose staleness is less than or equal to maxStaleness.
      * </p>     *
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads secondary if available, otherwise from primary.
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static ReadPreference secondaryPreferred(final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.SecondaryPreferredReadPreference(Collections.<TagSet>emptyList(),
-                                                                                MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new SecondaryPreferredReadPreference(Collections.<TagSet>emptyList(), maxStaleness, timeUnit);
     }
 
     /**
@@ -187,14 +196,15 @@ public abstract class ReadPreference {
      * and selects only those secondaries whose staleness is less than or equal to maxStaleness.
      * </p>
      *
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads nearest
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static ReadPreference nearest(final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.NearestReadPreference(Collections.<TagSet>emptyList(),
-                                                                                MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new NearestReadPreference(Collections.<TagSet>emptyList(), maxStaleness, timeUnit);
     }
 
     /**
@@ -205,7 +215,7 @@ public abstract class ReadPreference {
      * @since 2.13
      */
     public static TaggableReadPreference primaryPreferred(final TagSet tagSet) {
-        return primaryPreferred(tagSet, 0, MILLISECONDS);
+        return new PrimaryPreferredReadPreference(singletonList(tagSet), null, MILLISECONDS);
     }
 
     /**
@@ -216,7 +226,7 @@ public abstract class ReadPreference {
      * @since 2.13
      */
     public static TaggableReadPreference secondary(final TagSet tagSet) {
-        return secondary(tagSet, 0, MILLISECONDS);
+        return new SecondaryReadPreference(singletonList(tagSet), null, MILLISECONDS);
     }
 
     /**
@@ -227,7 +237,7 @@ public abstract class ReadPreference {
      * @since 2.13
      */
     public static TaggableReadPreference secondaryPreferred(final TagSet tagSet) {
-        return secondaryPreferred(tagSet, 0, MILLISECONDS);
+        return new SecondaryPreferredReadPreference(singletonList(tagSet), null, MILLISECONDS);
     }
 
     /**
@@ -238,7 +248,7 @@ public abstract class ReadPreference {
      * @since 2.13
      */
     public static TaggableReadPreference nearest(final TagSet tagSet) {
-        return nearest(tagSet, 0, MILLISECONDS);
+        return new NearestReadPreference(singletonList(tagSet), null, MILLISECONDS);
     }
 
     /**
@@ -251,15 +261,16 @@ public abstract class ReadPreference {
      * </p>
      *
      * @param tagSet the set of tags to limit the list of secondaries to.
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads primary if available, otherwise a secondary respective of tags.\
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static TaggableReadPreference primaryPreferred(final TagSet tagSet,
                                                           final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.PrimaryPreferredReadPreference(Collections.singletonList(tagSet),
-                                                                                MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new PrimaryPreferredReadPreference(singletonList(tagSet), maxStaleness, timeUnit);
     }
 
     /**
@@ -271,15 +282,16 @@ public abstract class ReadPreference {
      * </p>
      *
      * @param tagSet the set of tags to limit the list of secondaries to
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads secondary respective of tags.
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static TaggableReadPreference secondary(final TagSet tagSet,
                                                    final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.SecondaryReadPreference(Collections.singletonList(tagSet),
-                                                                         MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new SecondaryReadPreference(singletonList(tagSet), maxStaleness, timeUnit);
     }
 
     /**
@@ -291,15 +303,16 @@ public abstract class ReadPreference {
      * and selects only those secondaries whose staleness is less than or equal to maxStaleness.
      * </p>     *
      * @param tagSet the set of tags to limit the list of secondaries to
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads secondary if available respective of tags, otherwise from primary irrespective of tags.
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static TaggableReadPreference secondaryPreferred(final TagSet tagSet,
                                                             final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.SecondaryPreferredReadPreference(Collections.singletonList(tagSet),
-                                                                                  MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new SecondaryPreferredReadPreference(singletonList(tagSet), maxStaleness, timeUnit);
     }
 
     /**
@@ -312,15 +325,16 @@ public abstract class ReadPreference {
      * </p>
      *
      * @param tagSet the set of tags to limit the list of secondaries to
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads nearest node respective of tags.
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static TaggableReadPreference nearest(final TagSet tagSet,
                                                  final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.NearestReadPreference(Collections.singletonList(tagSet),
-                                                                       MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new NearestReadPreference(singletonList(tagSet), maxStaleness, timeUnit);
     }
 
 
@@ -334,7 +348,7 @@ public abstract class ReadPreference {
      * @since 2.13
      */
     public static TaggableReadPreference primaryPreferred(final List<TagSet> tagSetList) {
-        return primaryPreferred(tagSetList, 0, MILLISECONDS);
+        return new PrimaryPreferredReadPreference(tagSetList, null, MILLISECONDS);
     }
 
     /**
@@ -347,7 +361,7 @@ public abstract class ReadPreference {
      * @since 2.13
      */
     public static TaggableReadPreference secondary(final List<TagSet> tagSetList) {
-        return secondary(tagSetList, 0, MILLISECONDS);
+        return new SecondaryReadPreference(tagSetList, null, MILLISECONDS);
     }
 
     /**
@@ -360,7 +374,7 @@ public abstract class ReadPreference {
      * @since 2.13
      */
     public static TaggableReadPreference secondaryPreferred(final List<TagSet> tagSetList) {
-        return secondaryPreferred(tagSetList, 0, MILLISECONDS);
+        return new SecondaryPreferredReadPreference(tagSetList, null, MILLISECONDS);
     }
 
     /**
@@ -373,7 +387,7 @@ public abstract class ReadPreference {
      * @since 2.13
      */
     public static TaggableReadPreference nearest(final List<TagSet> tagSetList) {
-        return nearest(tagSetList, 0, MILLISECONDS);
+        return new NearestReadPreference(tagSetList, null, MILLISECONDS);
     }
 
     /**
@@ -391,14 +405,16 @@ public abstract class ReadPreference {
      * </p>
      *
      * @param tagSetList the list of tag sets to limit the list of secondaries to
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads primary if available, otherwise a secondary respective of tags.
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static TaggableReadPreference primaryPreferred(final List<TagSet> tagSetList,
                                                           final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.PrimaryPreferredReadPreference(tagSetList, MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new PrimaryPreferredReadPreference(tagSetList, maxStaleness, timeUnit);
     }
 
     /**
@@ -416,14 +432,16 @@ public abstract class ReadPreference {
      * </p>
      *
      * @param tagSetList the list of tag sets to limit the list of secondaries to
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads secondary respective of tags.
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static TaggableReadPreference secondary(final List<TagSet> tagSetList,
                                                    final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.SecondaryReadPreference(tagSetList, MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new SecondaryReadPreference(tagSetList, maxStaleness, timeUnit);
     }
 
     /**
@@ -441,14 +459,16 @@ public abstract class ReadPreference {
      * </p>
      *
      * @param tagSetList the list of tag sets to limit the list of secondaries to
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads secondary if available respective of tags, otherwise from primary irrespective of tags.
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static TaggableReadPreference secondaryPreferred(final List<TagSet> tagSetList,
                                                             final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.SecondaryPreferredReadPreference(tagSetList, MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new SecondaryPreferredReadPreference(tagSetList, maxStaleness, timeUnit);
     }
 
     /**
@@ -466,14 +486,16 @@ public abstract class ReadPreference {
      * </p>
      *
      * @param tagSetList the list of tag sets to limit the list of secondaries to
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return ReadPreference which reads nearest node respective of tags.
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static TaggableReadPreference nearest(final List<TagSet> tagSetList,
                                                  final long maxStaleness, final TimeUnit timeUnit) {
-        return new TaggableReadPreference.NearestReadPreference(tagSetList, MILLISECONDS.convert(maxStaleness, timeUnit));
+        return new NearestReadPreference(tagSetList, maxStaleness, timeUnit);
     }
 
     /**
@@ -483,9 +505,7 @@ public abstract class ReadPreference {
      * @return the read preference
      */
     public static ReadPreference valueOf(final String name) {
-        if (name == null) {
-            throw new IllegalArgumentException();
-        }
+        notNull("name", name);
 
         String nameToCheck = name.toLowerCase();
 
@@ -517,7 +537,7 @@ public abstract class ReadPreference {
      * @since 2.13
      */
     public static TaggableReadPreference valueOf(final String name, final List<TagSet> tagSetList) {
-        return valueOf(name, tagSetList, 0, MILLISECONDS);
+        return valueOf(name, tagSetList, null, MILLISECONDS);
     }
 
     /**
@@ -530,13 +550,20 @@ public abstract class ReadPreference {
      *
      * @param name the name of the read preference
      * @param tagSetList the list of tag sets
-     * @param maxStaleness the max allowable staleness of secondaries.  A zero value indicates the absence of a maximum.
+     * @param maxStaleness the max allowable staleness of secondaries. The minimum value is either 90 seconds, or the heartbeat frequency
+     *                     plus 10 seconds, whichever is greatest.
      * @param timeUnit the time unit of maxStaleness
      * @return the taggable read preference
      * @since 3.4
+     * @see TaggableReadPreference#getMaxStaleness(TimeUnit)
      */
     public static TaggableReadPreference valueOf(final String name, final List<TagSet> tagSetList, final long maxStaleness,
                                                  final TimeUnit timeUnit) {
+        return valueOf(name, tagSetList, (Long) maxStaleness, timeUnit);
+    }
+
+    private static TaggableReadPreference valueOf(final String name, final List<TagSet> tagSetList, @Nullable final Long maxStaleness,
+                                                  final TimeUnit timeUnit) {
         notNull("name", name);
         notNull("tagSetList", tagSetList);
         notNull("timeUnit", timeUnit);
@@ -547,19 +574,17 @@ public abstract class ReadPreference {
             throw new IllegalArgumentException("Primary read preference can not also specify tag sets or max staleness");
         }
 
-        long maxStalenessMS = MILLISECONDS.convert(maxStaleness, timeUnit);
-
         if (nameToCheck.equals(SECONDARY.getName().toLowerCase())) {
-            return new TaggableReadPreference.SecondaryReadPreference(tagSetList, maxStalenessMS);
+            return new SecondaryReadPreference(tagSetList, maxStaleness, timeUnit);
         }
         if (nameToCheck.equals(SECONDARY_PREFERRED.getName().toLowerCase())) {
-            return new TaggableReadPreference.SecondaryPreferredReadPreference(tagSetList, maxStalenessMS);
+            return new SecondaryPreferredReadPreference(tagSetList, maxStaleness, timeUnit);
         }
         if (nameToCheck.equals(PRIMARY_PREFERRED.getName().toLowerCase())) {
-            return new TaggableReadPreference.PrimaryPreferredReadPreference(tagSetList, maxStalenessMS);
+            return new PrimaryPreferredReadPreference(tagSetList, maxStaleness, timeUnit);
         }
         if (nameToCheck.equals(NEAREST.getName().toLowerCase())) {
-            return new TaggableReadPreference.NearestReadPreference(tagSetList, maxStalenessMS);
+            return new NearestReadPreference(tagSetList, maxStaleness, timeUnit);
         }
 
         throw new IllegalArgumentException("No match for read preference of " + name);
@@ -622,9 +647,9 @@ public abstract class ReadPreference {
 
     static {
         PRIMARY = new PrimaryReadPreference();
-        SECONDARY = new TaggableReadPreference.SecondaryReadPreference();
-        SECONDARY_PREFERRED = new TaggableReadPreference.SecondaryPreferredReadPreference();
-        PRIMARY_PREFERRED = new TaggableReadPreference.PrimaryPreferredReadPreference();
-        NEAREST = new TaggableReadPreference.NearestReadPreference();
+        SECONDARY = new SecondaryReadPreference();
+        SECONDARY_PREFERRED = new SecondaryPreferredReadPreference();
+        PRIMARY_PREFERRED = new PrimaryPreferredReadPreference();
+        NEAREST = new NearestReadPreference();
    }
 }

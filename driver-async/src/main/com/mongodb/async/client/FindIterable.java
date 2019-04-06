@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package com.mongodb.async.client;
 
 import com.mongodb.CursorType;
+import com.mongodb.client.model.Collation;
+import com.mongodb.lang.Nullable;
 import org.bson.conversions.Bson;
 
 import java.util.concurrent.TimeUnit;
@@ -26,7 +28,9 @@ import java.util.concurrent.TimeUnit;
  *
  * @param <T> The type of the result.
  * @since 3.0
+ * @deprecated Prefer the Reactive Streams-based asynchronous driver (mongodb-driver-reactivestreams artifactId)
  */
+@Deprecated
 public interface FindIterable<T> extends MongoIterable<T> {
 
     /**
@@ -36,7 +40,7 @@ public interface FindIterable<T> extends MongoIterable<T> {
      * @return this
      * @mongodb.driver.manual reference/method/db.collection.find/ Filter
      */
-    FindIterable<T> filter(Bson filter);
+    FindIterable<T> filter(@Nullable Bson filter);
 
     /**
      * Sets the limit to apply.
@@ -91,8 +95,10 @@ public interface FindIterable<T> extends MongoIterable<T> {
      * @param modifiers the query modifiers to apply, which may be null.
      * @return this
      * @mongodb.driver.manual reference/operator/query-modifier/ Query Modifiers
+     * @deprecated use the individual setters instead
      */
-    FindIterable<T> modifiers(Bson modifiers);
+    @Deprecated
+    FindIterable<T> modifiers(@Nullable Bson modifiers);
 
     /**
      * Sets a document describing the fields to return for all matching documents.
@@ -101,7 +107,7 @@ public interface FindIterable<T> extends MongoIterable<T> {
      * @return this
      * @mongodb.driver.manual reference/method/db.collection.find/ Projection
      */
-    FindIterable<T> projection(Bson projection);
+    FindIterable<T> projection(@Nullable Bson projection);
     /**
      * Sets the sort criteria to apply to the query.
      *
@@ -109,7 +115,7 @@ public interface FindIterable<T> extends MongoIterable<T> {
      * @return this
      * @mongodb.driver.manual reference/method/cursor.sort/ Sort
      */
-    FindIterable<T> sort(Bson sort);
+    FindIterable<T> sort(@Nullable Bson sort);
 
     /**
      * The server normally times out idle cursors after an inactivity period (10 minutes)
@@ -153,4 +159,95 @@ public interface FindIterable<T> extends MongoIterable<T> {
      * @mongodb.driver.manual reference/method/cursor.batchSize/#cursor.batchSize Batch Size
      */
     FindIterable<T> batchSize(int batchSize);
+
+    /**
+     * Sets the collation options
+     *
+     * <p>A null value represents the server default.</p>
+     * @param collation the collation options to use
+     * @return this
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    FindIterable<T> collation(@Nullable Collation collation);
+
+    /**
+     * Sets the comment to the query. A null value means no comment is set.
+     *
+     * @param comment the comment
+     * @return this
+     * @since 3.5
+     */
+    FindIterable<T> comment(@Nullable String comment);
+
+    /**
+     * Sets the hint for which index to use. A null value means no hint is set.
+     *
+     * @param hint the hint
+     * @return this
+     * @since 3.5
+     */
+    FindIterable<T> hint(@Nullable Bson hint);
+
+    /**
+     * Sets the exclusive upper bound for a specific index. A null value means no max is set.
+     *
+     * @param max the max
+     * @return this
+     * @since 3.5
+     */
+    FindIterable<T> max(@Nullable Bson max);
+
+    /**
+     * Sets the minimum inclusive lower bound for a specific index. A null value means no max is set.
+     *
+     * @param min the min
+     * @return this
+     * @since 3.5
+     */
+    FindIterable<T> min(@Nullable Bson min);
+
+    /**
+     * Sets the maximum number of documents or index keys to scan when executing the query.
+     *
+     * A zero value or less will be ignored, and indicates that the driver should respect the server's default value.
+     *
+     * @param maxScan the maxScan
+     * @return this
+     * @since 3.5
+     * @deprecated Deprecated as of MongoDB 4.0 release
+     */
+    @Deprecated
+    FindIterable<T> maxScan(long maxScan);
+
+    /**
+     * Sets the returnKey. If true the find operation will return only the index keys in the resulting documents.
+     *
+     * @param returnKey the returnKey
+     * @return this
+     * @since 3.5
+     */
+    FindIterable<T> returnKey(boolean returnKey);
+
+    /**
+     * Sets the showRecordId. Set to true to add a field {@code $recordId} to the returned documents.
+     *
+     * @param showRecordId the showRecordId
+     * @return this
+     * @since 3.5
+     */
+    FindIterable<T> showRecordId(boolean showRecordId);
+
+    /**
+     * Sets the snapshot.
+     *
+     * If true it prevents the cursor from returning a document more than once because of an intervening write operation.
+     *
+     * @param snapshot the snapshot
+     * @return this
+     * @since 3.5
+     * @deprecated Deprecated in MongoDB 3.6 release and removed in MongoDB 4.0 release
+     */
+    @Deprecated
+    FindIterable<T> snapshot(boolean snapshot);
 }

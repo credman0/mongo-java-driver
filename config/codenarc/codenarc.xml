@@ -1,3 +1,19 @@
+<!--
+  ~ Copyright 2008-present MongoDB, Inc.
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
 <ruleset xmlns="http://codenarc.org/ruleset/1.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://codenarc.org/ruleset/1.0 http://codenarc.org/ruleset-schema.xsd"
@@ -18,11 +34,27 @@
         <exclude name="ComparisonWithSelf"/>
     </ruleset-ref>
     <ruleset-ref path='rulesets/braces.xml'/>
-    <ruleset-ref path='rulesets/concurrency.xml'/>
+    <ruleset-ref path='rulesets/concurrency.xml'>
+        <rule-config name='BusyWait'>
+            <property name='doNotApplyToFileNames' value='AsyncQueryBatchCursorFunctionalSpecification.groovy'/>
+        </rule-config>
+
+    </ruleset-ref>
     <ruleset-ref path='rulesets/convention.xml'>
         <rule-config name='NoDef'>
             <property name='doNotApplyToFilesMatching' value='.*Specification.groovy'/>
         </rule-config>
+        <rule-config name='HashtableIsObsolete'>
+            <property name='doNotApplyToFileNames' value='MongoClientFactorySpecification.groovy'/>
+        </rule-config>
+        <exclude name="TrailingComma"/>
+        <exclude name="CouldBeSwitchStatement"/>
+        <exclude name="NoDef"/>
+        <exclude name='InvertedCondition'/>
+        <exclude name='MethodReturnTypeRequired'/>
+        <exclude name='MethodParameterTypeRequired'/>
+        <exclude name='FieldTypeRequired '/>
+        <exclude name="VariableTypeRequired"/>
     </ruleset-ref>
     <ruleset-ref path='rulesets/design.xml'>
         <rule-config name='BuilderMethodWithSideEffects'>
@@ -40,7 +72,11 @@
         <exclude name="DuplicateStringLiteral"/>
         <exclude name="DuplicateMapLiteral"/>
     </ruleset-ref>
-    <ruleset-ref path='rulesets/exceptions.xml'/>
+    <ruleset-ref path='rulesets/exceptions.xml'>
+        <rule-config name='ThrowException'>
+            <property name='doNotApplyToFileNames' value='BsonCodecSpecification.groovy'/>
+        </rule-config>
+    </ruleset-ref>
     <ruleset-ref path='rulesets/formatting.xml'>
         <rule-config name='LineLength'>
             <property name='length' value='140'/>
@@ -53,6 +89,7 @@
         <exclude name='BlankLineBeforePackage'/>
         <exclude name='ConsecutiveBlankLines'/>
         <exclude name='FileEndsWithoutNewline'/>
+        <exclude name='Indentation'/>
     </ruleset-ref>
     <ruleset-ref path='rulesets/generic.xml'/>
     <ruleset-ref path='rulesets/groovyism.xml'>
@@ -77,6 +114,9 @@
         <rule-config name='ParameterCount'>
             <property name='doNotApplyToFilesMatching' value='.*Specification.groovy'/>
         </rule-config>
+        <rule-config name='NestedBlockDepth'>
+            <property name='doNotApplyToFilesMatching' value='.*Specification.groovy'/>
+        </rule-config>
         <exclude name='CrapMetric'/>
         <exclude name='AbcMetric'/>
         <exclude name='MethodSize'/>
@@ -88,6 +128,7 @@
         <!-- dangerous rule because if you use "with in a then clause of a Spock test, the assertions are not run -->
         <exclude name="UnnecessaryObjectReferences"/>
         <exclude name="UnnecessaryBigDecimalInstantiation"/>
+        <exclude name="UnnecessarySetter"/>
     </ruleset-ref>
     <ruleset-ref path='rulesets/unused.xml'>
         <rule-config name='UnusedObject'>

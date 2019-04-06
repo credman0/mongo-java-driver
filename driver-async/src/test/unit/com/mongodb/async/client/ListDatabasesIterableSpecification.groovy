@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@ import com.mongodb.Function
 import com.mongodb.async.AsyncBatchCursor
 import com.mongodb.async.FutureResultCallback
 import com.mongodb.async.SingleResultCallback
-import com.mongodb.operation.AsyncOperationExecutor
 import com.mongodb.operation.ListDatabasesOperation
+import org.bson.BsonDocument
 import org.bson.Document
 import org.bson.codecs.BsonValueCodecProvider
 import org.bson.codecs.DocumentCodec
@@ -49,7 +49,7 @@ class ListDatabasesIterableSpecification extends Specification {
             }
         }
         def executor = new TestOperationExecutor([cursor, cursor]);
-        def listDatabasesIterable = new ListDatabasesIterableImpl<Document>(Document, codecRegistry, readPreference, executor)
+        def listDatabasesIterable = new ListDatabasesIterableImpl<Document>(null, Document, codecRegistry, readPreference, executor)
                 .maxTime(1000, MILLISECONDS)
                 .batchSize(1) // batchSize should be silently ignored
 
@@ -64,12 +64,13 @@ class ListDatabasesIterableSpecification extends Specification {
         readPreference == secondary()
 
         when: 'overriding initial options'
-        listDatabasesIterable.maxTime(999, MILLISECONDS).into([]) { result, t -> }
+        listDatabasesIterable.maxTime(999, MILLISECONDS).filter(Document.parse('{a: 1}')).nameOnly(true).into([]) { result, t -> }
 
         operation = executor.getReadOperation() as ListDatabasesOperation<Document>
 
         then: 'should use the overrides'
-        expect operation, isTheSameAs(new ListDatabasesOperation<Document>(new DocumentCodec()).maxTime(999, MILLISECONDS))
+        expect operation, isTheSameAs(new ListDatabasesOperation<Document>(new DocumentCodec()).maxTime(999, MILLISECONDS)
+                .filter(BsonDocument.parse('{a: 1}')).nameOnly(true))
     }
 
     def 'should follow the MongoIterable interface as expected'() {
@@ -91,7 +92,7 @@ class ListDatabasesIterableSpecification extends Specification {
             }
         }
         def executor = new TestOperationExecutor([cursor(), cursor(), cursor(), cursor(), cursor()]);
-        def mongoIterable = new ListDatabasesIterableImpl<Document>(Document, codecRegistry, readPreference, executor)
+        def mongoIterable = new ListDatabasesIterableImpl<Document>(null, Document, codecRegistry, readPreference, executor)
 
         when:
         def results = new FutureResultCallback()
@@ -153,8 +154,8 @@ class ListDatabasesIterableSpecification extends Specification {
 
     def 'should check variables using notNull'() {
         given:
-        def mongoIterable = new ListDatabasesIterableImpl<Document>(Document, codecRegistry, readPreference,
-                Stub(AsyncOperationExecutor))
+        def mongoIterable = new ListDatabasesIterableImpl<Document>(null, Document, codecRegistry, readPreference,
+                Stub(OperationExecutor))
         def callback = Stub(SingleResultCallback)
         def block = Stub(Block)
         def target = Stub(List)
@@ -194,5 +195,21 @@ class ListDatabasesIterableSpecification extends Specification {
 
         then:
         thrown(IllegalArgumentException)
+    }
+
+    def 'should get and set batchSize as expected'() {
+        when:
+        def batchSize = 5
+        def mongoIterable = new ListDatabasesIterableImpl<Document>(null, Document, codecRegistry, readPreference,
+                Stub(OperationExecutor))
+
+        then:
+        mongoIterable.getBatchSize() == null
+
+        when:
+        mongoIterable.batchSize(batchSize)
+
+        then:
+        mongoIterable.getBatchSize() == batchSize
     }
 }

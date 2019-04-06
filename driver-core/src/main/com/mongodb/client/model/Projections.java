@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -9,7 +9,7 @@
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONObjectITIONS OF ANY KINObject, either express or implied.
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
@@ -185,17 +185,16 @@ public final class Projections {
      *
      * @param projections the list of projections to combine
      * @return the combined projection
-     * @mongodb.driver.manual
      */
-    public static Bson fields(final List<Bson> projections) {
-        notNull("sorts", projections);
+    public static Bson fields(final List<? extends Bson> projections) {
+        notNull("projections", projections);
         return new FieldsProjection(projections);
     }
 
     private static class FieldsProjection implements Bson {
-        private final List<Bson> projections;
+        private final List<? extends Bson> projections;
 
-        public FieldsProjection(final List<Bson> projections) {
+        FieldsProjection(final List<? extends Bson> projections) {
             this.projections = projections;
         }
 
@@ -213,6 +212,25 @@ public final class Projections {
         }
 
         @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+
+            FieldsProjection that = (FieldsProjection) o;
+
+            return projections != null ? projections.equals(that.projections) : that.projections == null;
+        }
+
+        @Override
+        public int hashCode() {
+            return projections != null ? projections.hashCode() : 0;
+        }
+
+        @Override
         public String toString() {
             return "Projections{"
                            + "projections=" + projections
@@ -225,7 +243,7 @@ public final class Projections {
         private final String fieldName;
         private final Bson filter;
 
-        public ElemMatchFilterProjection(final String fieldName, final Bson filter) {
+        ElemMatchFilterProjection(final String fieldName, final Bson filter) {
             this.fieldName = fieldName;
             this.filter = filter;
         }
@@ -233,6 +251,30 @@ public final class Projections {
         @Override
         public <TDocument> BsonDocument toBsonDocument(final Class<TDocument> documentClass, final CodecRegistry codecRegistry) {
             return new BsonDocument(fieldName, new BsonDocument("$elemMatch", filter.toBsonDocument(documentClass, codecRegistry)));
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+
+            ElemMatchFilterProjection that = (ElemMatchFilterProjection) o;
+
+            if (fieldName != null ? !fieldName.equals(that.fieldName) : that.fieldName != null) {
+                return false;
+            }
+            return filter != null ? filter.equals(that.filter) : that.filter == null;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = fieldName != null ? fieldName.hashCode() : 0;
+            result = 31 * result + (filter != null ? filter.hashCode() : 0);
+            return result;
         }
 
         @Override

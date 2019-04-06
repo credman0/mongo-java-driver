@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,11 +26,12 @@ final class NettyByteBuf implements ByteBuf {
     private io.netty.buffer.ByteBuf proxied;
     private boolean isWriting = true;
 
-    public NettyByteBuf(final io.netty.buffer.ByteBuf proxied) {
-        this.proxied = proxied;
+    @SuppressWarnings("deprecation")
+    NettyByteBuf(final io.netty.buffer.ByteBuf proxied) {
+        this.proxied = proxied.order(ByteOrder.LITTLE_ENDIAN);
     }
 
-    public NettyByteBuf(final io.netty.buffer.ByteBuf proxied, final boolean isWriting) {
+    NettyByteBuf(final io.netty.buffer.ByteBuf proxied, final boolean isWriting) {
         this(proxied);
         this.isWriting = isWriting;
     }
@@ -113,6 +114,7 @@ final class NettyByteBuf implements ByteBuf {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public ByteBuf order(final ByteOrder byteOrder) {
         proxied = proxied.order(byteOrder);
         return this;

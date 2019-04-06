@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -771,6 +771,28 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
         return this;
     }
 
+    /**
+     * Gets the first key in the document.
+     *
+     * @return the first key in the document
+     * @throws java.util.NoSuchElementException if the document is empty
+     * @since 3.6
+     */
+    public String getFirstKey() {
+        return keySet().iterator().next();
+    }
+
+    /**
+     * Gets the first value in the document
+     *
+     * @return the first value in the document
+     * @throws java.util.NoSuchElementException if the document is empty
+     * @since 3.7
+     */
+    public BsonReader asBsonReader() {
+        return new BsonDocumentReader(this);
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -791,10 +813,14 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
     }
 
     /**
-     * Gets a JSON representation of this document using the default settings of {@code JsonWriterSettings}.
+     * Gets a JSON representation of this document using the {@link org.bson.json.JsonMode#STRICT} output mode, and otherwise the default
+     * settings of {@link JsonWriterSettings.Builder}.
+     *
      * @return a JSON representation of this document
+     * @see #toJson(JsonWriterSettings)
      * @see JsonWriterSettings
      */
+    @SuppressWarnings("deprecation")
     public String toJson() {
         return toJson(new JsonWriterSettings());
     }
@@ -860,7 +886,7 @@ public class BsonDocument extends BsonValue implements Map<String, BsonValue>, C
 
         private final byte[] bytes;
 
-        public SerializationProxy(final BsonDocument document) {
+        SerializationProxy(final BsonDocument document) {
             BasicOutputBuffer buffer = new BasicOutputBuffer();
             new BsonDocumentCodec().encode(new BsonBinaryWriter(buffer), document, EncoderContext.builder().build());
             this.bytes = new byte[buffer.size()];

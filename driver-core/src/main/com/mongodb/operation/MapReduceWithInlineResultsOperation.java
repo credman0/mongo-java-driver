@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,18 +18,20 @@ package com.mongodb.operation;
 
 import com.mongodb.ExplainVerbosity;
 import com.mongodb.MongoNamespace;
-import com.mongodb.ReadConcern;
 import com.mongodb.ServerAddress;
 import com.mongodb.async.SingleResultCallback;
 import com.mongodb.binding.AsyncReadBinding;
 import com.mongodb.binding.ConnectionSource;
 import com.mongodb.binding.ReadBinding;
+import com.mongodb.client.model.Collation;
 import com.mongodb.connection.AsyncConnection;
 import com.mongodb.connection.Connection;
 import com.mongodb.connection.ConnectionDescription;
 import com.mongodb.connection.QueryResult;
+import com.mongodb.internal.connection.NoOpSessionContext;
 import com.mongodb.operation.CommandOperationHelper.CommandTransformer;
 import com.mongodb.operation.OperationHelper.AsyncCallableWithConnection;
+import com.mongodb.session.SessionContext;
 import org.bson.BsonBoolean;
 import org.bson.BsonDocument;
 import org.bson.BsonInt32;
@@ -48,11 +50,13 @@ import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommand
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocolAsync;
 import static com.mongodb.operation.DocumentHelper.putIfNotZero;
 import static com.mongodb.operation.DocumentHelper.putIfTrue;
+import static com.mongodb.operation.ExplainHelper.asExplainCommand;
 import static com.mongodb.operation.OperationHelper.CallableWithConnectionAndSource;
 import static com.mongodb.operation.OperationHelper.LOGGER;
-import static com.mongodb.operation.OperationHelper.checkValidReadConcern;
 import static com.mongodb.operation.OperationHelper.releasingCallback;
+import static com.mongodb.operation.OperationHelper.validateReadConcernAndCollation;
 import static com.mongodb.operation.OperationHelper.withConnection;
+import static com.mongodb.operation.OperationReadConcernHelper.appendReadConcernToCommand;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 /**
@@ -66,6 +70,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
  * @mongodb.driver.manual core/map-reduce Map-Reduce
  * @since 3.0
  */
+@Deprecated
 public class MapReduceWithInlineResultsOperation<T> implements AsyncReadOperation<MapReduceAsyncBatchCursor<T>>,
                                                                ReadOperation<MapReduceBatchCursor<T>> {
     private final MongoNamespace namespace;
@@ -80,7 +85,7 @@ public class MapReduceWithInlineResultsOperation<T> implements AsyncReadOperatio
     private boolean jsMode;
     private boolean verbose;
     private long maxTimeMS;
-    private ReadConcern readConcern = ReadConcern.DEFAULT;
+    private Collation collation;
 
     /**
      * Construct a MapReduceOperation with all the criteria it needs to execute.
@@ -97,6 +102,26 @@ public class MapReduceWithInlineResultsOperation<T> implements AsyncReadOperatio
         this.mapFunction = notNull("mapFunction", mapFunction);
         this.reduceFunction = notNull("reduceFunction", reduceFunction);
         this.decoder = notNull("decoder", decoder);
+    }
+
+    /**
+     * Gets the namespace.
+     *
+     * @return the namespace
+     * @since 3.4
+     */
+    public MongoNamespace getNamespace() {
+        return namespace;
+    }
+
+    /**
+     * Gets the decoder used to decode the result documents.
+     *
+     * @return the decoder
+     * @since 3.4
+     */
+    public Decoder<T> getDecoder() {
+        return decoder;
     }
 
     /**
@@ -274,6 +299,31 @@ public class MapReduceWithInlineResultsOperation<T> implements AsyncReadOperatio
     }
 
     /**
+     * Returns the collation options
+     *
+     * @return the collation options
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public Collation getCollation() {
+        return collation;
+    }
+
+    /**
+     * Sets the collation options
+     *
+     * <p>A null value represents the server default.</p>
+     * @param collation the collation options to use
+     * @return this
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public MapReduceWithInlineResultsOperation<T> collation(final Collation collation) {
+        this.collation = collation;
+        return this;
+    }
+
+    /**
      * Gets the maximum execution time on the server for this operation.  The default is 0, which places no limit on the execution time.
      *
      * @param timeUnit the time unit to return the result in
@@ -300,29 +350,6 @@ public class MapReduceWithInlineResultsOperation<T> implements AsyncReadOperatio
     }
 
     /**
-     * Gets the read concern
-     *
-     * @return the read concern
-     * @since 3.2
-     * @mongodb.driver.manual reference/readConcern/ Read Concern
-     */
-    public ReadConcern getReadConcern() {
-        return readConcern;
-    }
-
-    /**
-     * Sets the read concern
-     * @param readConcern the read concern
-     * @return this
-     * @since 3.2
-     * @mongodb.driver.manual reference/readConcern/ Read Concern
-     */
-    public MapReduceWithInlineResultsOperation<T> readConcern(final ReadConcern readConcern) {
-        this.readConcern = notNull("readConcern", readConcern);
-        return this;
-    }
-
-    /**
      * Executing this will return a cursor with your results and the statistics in.
      *
      * @param binding the binding
@@ -334,8 +361,8 @@ public class MapReduceWithInlineResultsOperation<T> implements AsyncReadOperatio
         return withConnection(binding, new CallableWithConnectionAndSource<MapReduceBatchCursor<T>>() {
             @Override
             public MapReduceBatchCursor<T> call(final ConnectionSource source, final Connection connection) {
-                checkValidReadConcern(connection, readConcern);
-                return executeWrappedCommandProtocol(binding, namespace.getDatabaseName(), getCommand(),
+                validateReadConcernAndCollation(connection, binding.getSessionContext().getReadConcern(), collation);
+                return executeWrappedCommandProtocol(binding, namespace.getDatabaseName(), getCommand(binding.getSessionContext()),
                                                      CommandResultDocumentCodec.create(decoder, "results"),
                                                      connection, transformer(source, connection));
             }
@@ -353,18 +380,20 @@ public class MapReduceWithInlineResultsOperation<T> implements AsyncReadOperatio
                 } else {
                     final SingleResultCallback<MapReduceAsyncBatchCursor<T>> wrappedCallback = releasingCallback(
                             errHandlingCallback, connection);
-                    checkValidReadConcern(connection, readConcern, new AsyncCallableWithConnection() {
-                        @Override
-                        public void call(final AsyncConnection connection, final Throwable t) {
-                            if (t != null) {
-                                wrappedCallback.onResult(null, t);
-                            } else {
-                                executeWrappedCommandProtocolAsync(binding, namespace.getDatabaseName(), getCommand(),
-                                        CommandResultDocumentCodec.create(decoder, "results"), connection, asyncTransformer(connection),
-                                        wrappedCallback);
-                            }
-                        }
-                    });
+                    validateReadConcernAndCollation(connection, binding.getSessionContext().getReadConcern(), collation,
+                            new AsyncCallableWithConnection() {
+                                @Override
+                                public void call(final AsyncConnection connection, final Throwable t) {
+                                    if (t != null) {
+                                        wrappedCallback.onResult(null, t);
+                                    } else {
+                                        executeWrappedCommandProtocolAsync(binding, namespace.getDatabaseName(),
+                                                getCommand(binding.getSessionContext()),
+                                                CommandResultDocumentCodec.create(decoder, "results"), connection,
+                                                asyncTransformer(connection), wrappedCallback);
+                                    }
+                                }
+                            });
                 }
             }
         });
@@ -392,7 +421,7 @@ public class MapReduceWithInlineResultsOperation<T> implements AsyncReadOperatio
 
     private CommandReadOperation<BsonDocument> createExplainableOperation(final ExplainVerbosity explainVerbosity) {
         return new CommandReadOperation<BsonDocument>(namespace.getDatabaseName(),
-                                                      ExplainHelper.asExplainCommand(getCommand(), explainVerbosity),
+                                                      asExplainCommand(getCommand(NoOpSessionContext.INSTANCE), explainVerbosity),
                                                       new BsonDocumentCodec());
     }
 
@@ -411,13 +440,13 @@ public class MapReduceWithInlineResultsOperation<T> implements AsyncReadOperatio
         return new CommandTransformer<BsonDocument, MapReduceAsyncBatchCursor<T>>() {
             @Override
             public MapReduceAsyncBatchCursor<T> apply(final BsonDocument result, final ServerAddress serverAddress) {
-                return new MapReduceInlineResultsAsyncCursor<T>(createQueryResult(result, connection.getDescription()), decoder,
+                return new MapReduceInlineResultsAsyncCursor<T>(createQueryResult(result, connection.getDescription()),
                                                                 MapReduceHelper.createStatistics(result));
             }
         };
     }
 
-    private BsonDocument getCommand() {
+    private BsonDocument getCommand(final SessionContext sessionContext) {
         BsonDocument commandDocument = new BsonDocument("mapreduce", new BsonString(namespace.getCollectionName()))
                                            .append("map", getMapFunction())
                                            .append("reduce", getReduceFunction())
@@ -427,11 +456,13 @@ public class MapReduceWithInlineResultsOperation<T> implements AsyncReadOperatio
                                            .append("finalize", asValueOrNull(getFinalizeFunction()))
                                            .append("scope", asValueOrNull(getScope()))
                                            .append("verbose", BsonBoolean.valueOf(isVerbose()));
+
+        appendReadConcernToCommand(sessionContext, commandDocument);
         putIfNotZero(commandDocument, "limit", getLimit());
         putIfNotZero(commandDocument, "maxTimeMS", getMaxTime(MILLISECONDS));
         putIfTrue(commandDocument, "jsMode", isJsMode());
-        if (!readConcern.isServerDefault()) {
-            commandDocument.put("readConcern", readConcern.asDocument());
+        if (collation != null) {
+            commandDocument.put("collation", collation.asDocument());
         }
         return commandDocument;
     }

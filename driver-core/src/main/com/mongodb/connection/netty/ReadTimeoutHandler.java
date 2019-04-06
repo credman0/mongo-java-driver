@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  * Copyright 2012 The Netty Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,7 +35,7 @@ final class ReadTimeoutHandler extends ChannelInboundHandlerAdapter {
     private final long readTimeout;
     private volatile ScheduledFuture<?> timeout;
 
-    public ReadTimeoutHandler(final long readTimeout) {
+    ReadTimeoutHandler(final long readTimeout) {
         isTrueArgument("readTimeout must be greater than zero.", readTimeout > 0);
         this.readTimeout = readTimeout;
     }

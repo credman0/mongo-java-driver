@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package org.bson;
 
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,7 +36,7 @@ public class ByteBufNIO implements ByteBuf {
      * @param buf the {@code ByteBuffer} to wrap.
      */
     public ByteBufNIO(final ByteBuffer buf) {
-        this.buf = buf;
+        this.buf = buf.order(ByteOrder.LITTLE_ENDIAN);
     }
 
     @Override
@@ -98,7 +99,7 @@ public class ByteBufNIO implements ByteBuf {
 
     @Override
     public ByteBuf flip() {
-        buf.flip();
+        ((Buffer) buf).flip();
         return this;
     }
 
@@ -114,13 +115,13 @@ public class ByteBufNIO implements ByteBuf {
 
     @Override
     public ByteBuf position(final int newPosition) {
-        buf.position(newPosition);
+        ((Buffer) buf).position(newPosition);
         return this;
     }
 
     @Override
     public ByteBuf clear() {
-        buf.clear();
+        ((Buffer) buf).clear();
         return this;
     }
 
@@ -202,7 +203,7 @@ public class ByteBufNIO implements ByteBuf {
 
     @Override
     public ByteBuf limit(final int newLimit) {
-        buf.limit(newLimit);
+        ((Buffer) buf).limit(newLimit);
         return this;
     }
 

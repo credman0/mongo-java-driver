@@ -1,11 +1,11 @@
 /*
- * Copyright 2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -34,11 +34,12 @@ class NettyStreamFactoryFactorySmokeTestSpecification extends FunctionalSpecific
         def eventLoopGroup = new OioEventLoopGroup()
         def streamFactoryFactory = NettyStreamFactoryFactory.builder()
                 .eventLoopGroup(eventLoopGroup).socketChannelClass(OioSocketChannel).build()
-        MongoClientSettings.Builder builder = getMongoClientBuilderFromConnectionString().streamFactoryFactory(streamFactoryFactory)
+        com.mongodb.MongoClientSettings settings = getMongoClientBuilderFromConnectionString()
+                .streamFactoryFactory(streamFactoryFactory).build()
         def document = new Document('a', 1)
 
         when:
-        mongoClient = MongoClients.create(builder.build())
+        mongoClient = MongoClients.create(settings)
         def collection = mongoClient.getDatabase(databaseName).getCollection(collectionName)
 
 
@@ -50,7 +51,6 @@ class NettyStreamFactoryFactorySmokeTestSpecification extends FunctionalSpecific
 
         cleanup:
         mongoClient?.close()
-
     }
 
     def run(operation, ... args) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,11 @@
 package org.bson;
 
 import org.bson.codecs.BsonDocumentCodec;
-import org.bson.codecs.BsonValueCodecProvider;
 import org.bson.codecs.Codec;
+import org.bson.codecs.Decoder;
 import org.bson.codecs.DecoderContext;
 import org.bson.codecs.EncoderContext;
 import org.bson.codecs.RawBsonDocumentCodec;
-import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.io.BasicOutputBuffer;
 import org.bson.io.ByteBufferBsonInput;
 import org.bson.json.JsonReader;
@@ -37,12 +36,11 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Collection;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 import static org.bson.assertions.Assertions.isTrueArgument;
 import static org.bson.assertions.Assertions.notNull;
-import static org.bson.codecs.BsonValueCodecProvider.getClassForBsonType;
-import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 
 /**
  * An immutable BSON document that is represented using only the raw bytes.
@@ -52,8 +50,6 @@ import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 public final class RawBsonDocument extends BsonDocument {
     private static final long serialVersionUID = 1L;
     private static final int MIN_BSON_DOCUMENT_SIZE = 5;
-
-    private static final CodecRegistry REGISTRY = fromProviders(new BsonValueCodecProvider());
 
     private final byte[] bytes;
     private final int offset;
@@ -147,9 +143,21 @@ public final class RawBsonDocument extends BsonDocument {
      * @return the decoded document
      */
     public <T> T decode(final Codec<T> codec) {
+        return decode((Decoder<T>) codec);
+    }
+
+    /**
+     * Decode this into a document.
+     *
+     * @param decoder the decoder to facilitate the transformation
+     * @param <T>   the BSON type that the codec encodes/decodes
+     * @return the decoded document
+     * @since 3.6
+     */
+    public <T> T decode(final Decoder<T> decoder) {
         BsonBinaryReader reader = createReader();
         try {
-            return codec.decode(reader, DecoderContext.builder().build());
+            return decoder.decode(reader, DecoderContext.builder().build());
         } finally {
             reader.close();
         }
@@ -231,6 +239,21 @@ public final class RawBsonDocument extends BsonDocument {
     }
 
     @Override
+    public String getFirstKey() {
+        BsonBinaryReader bsonReader = createReader();
+        try {
+            bsonReader.readStartDocument();
+            try {
+                return bsonReader.readName();
+            } catch (BsonInvalidOperationException e) {
+                throw new NoSuchElementException();
+            }
+        } finally {
+            bsonReader.close();
+        }
+    }
+
+    @Override
     public boolean containsKey(final Object key) {
         if (key == null) {
             throw new IllegalArgumentException("key can not be null");
@@ -260,7 +283,7 @@ public final class RawBsonDocument extends BsonDocument {
             bsonReader.readStartDocument();
             while (bsonReader.readBsonType() != BsonType.END_OF_DOCUMENT) {
                 bsonReader.skipName();
-                if (deserializeBsonValue(bsonReader).equals(value)) {
+                if (RawBsonValueHelper.decode(bytes, bsonReader).equals(value)) {
                     return true;
                 }
             }
@@ -281,7 +304,7 @@ public final class RawBsonDocument extends BsonDocument {
             bsonReader.readStartDocument();
             while (bsonReader.readBsonType() != BsonType.END_OF_DOCUMENT) {
                 if (bsonReader.readName().equals(key)) {
-                    return deserializeBsonValue(bsonReader);
+                    return RawBsonValueHelper.decode(bytes, bsonReader);
                 }
                 bsonReader.skipValue();
             }
@@ -294,6 +317,7 @@ public final class RawBsonDocument extends BsonDocument {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public String toJson() {
         return toJson(new JsonWriterSettings());
     }
@@ -318,10 +342,6 @@ public final class RawBsonDocument extends BsonDocument {
     @Override
     public BsonDocument clone() {
         return new RawBsonDocument(bytes.clone(), offset, length);
-    }
-
-    private BsonValue deserializeBsonValue(final BsonBinaryReader bsonReader) {
-        return REGISTRY.get(getClassForBsonType(bsonReader.getCurrentBsonType())).decode(bsonReader, DecoderContext.builder().build());
     }
 
     private BsonBinaryReader createReader() {
@@ -352,7 +372,7 @@ public final class RawBsonDocument extends BsonDocument {
 
         private final byte[] bytes;
 
-        public SerializationProxy(final byte[] bytes, final int offset, final int length) {
+        SerializationProxy(final byte[] bytes, final int offset, final int length) {
             if (bytes.length == length) {
                 this.bytes = bytes;
             } else {

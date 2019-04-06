@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -159,6 +159,16 @@ public final class Indexes {
     }
 
     /**
+     * Create an index key for a text index on every field that contains string data.
+     *
+     * @return the index specification
+     * @mongodb.driver.manual core/text text index
+     */
+    public static Bson text() {
+        return text("$**");
+    }
+
+    /**
      * Create an index key for a hashed index on the given field.
      *
      * @param fieldName the field to create a hashed index on
@@ -188,21 +198,8 @@ public final class Indexes {
      * @return the compound index specification
      * @mongodb.driver.manual core/index-compound compoundIndex
      */
-    public static Bson compoundIndex(final List<Bson> indexes) {
-        notNull("indexes", indexes);
-        return new Bson() {
-            @Override
-            public <TDocument> BsonDocument toBsonDocument(final Class<TDocument> documentClass, final CodecRegistry codecRegistry) {
-                BsonDocument compoundIndex = new BsonDocument();
-                for (Bson index : indexes) {
-                    BsonDocument indexDocument = index.toBsonDocument(documentClass, codecRegistry);
-                    for (String key : indexDocument.keySet()) {
-                        compoundIndex.append(key, indexDocument.get(key));
-                    }
-                }
-                return compoundIndex;
-            }
-        };
+    public static Bson compoundIndex(final List<? extends Bson> indexes) {
+        return new CompoundIndex(indexes);
     }
 
     private static Bson compoundIndex(final List<String> fieldNames, final BsonValue value) {
@@ -212,4 +209,45 @@ public final class Indexes {
         }
         return document;
     }
+
+    private static class CompoundIndex implements Bson {
+        private final List<? extends Bson> indexes;
+
+        CompoundIndex(final List<? extends Bson> indexes) {
+            notNull("indexes", indexes);
+            this.indexes = indexes;
+        }
+
+        @Override
+        public <TDocument> BsonDocument toBsonDocument(final Class<TDocument> documentClass, final CodecRegistry codecRegistry) {
+            BsonDocument compoundIndex = new BsonDocument();
+            for (Bson index : indexes) {
+                BsonDocument indexDocument = index.toBsonDocument(documentClass, codecRegistry);
+                for (String key : indexDocument.keySet()) {
+                    compoundIndex.append(key, indexDocument.get(key));
+                }
+            }
+            return compoundIndex;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+
+            CompoundIndex that = (CompoundIndex) o;
+
+            return indexes.equals(that.indexes);
+        }
+
+        @Override
+        public int hashCode() {
+            return indexes.hashCode();
+        }
+    }
 }
+

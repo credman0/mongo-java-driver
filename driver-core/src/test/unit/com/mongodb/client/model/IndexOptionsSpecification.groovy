@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,13 +45,16 @@ class IndexOptionsSpecification extends Specification {
         options.getBucketSize() == null
         options.getStorageEngine() == null
         options.getPartialFilterExpression() == null
+        options.getCollation() == null
+        options.getWildcardProjection() == null
+        def wildcardProjection = BsonDocument.parse('{a  : 1}')
 
         when:
         def weights = BsonDocument.parse('{ a: 1000 }')
         def storageEngine = BsonDocument.parse('{ wiredTiger : { configString : "block_compressor=zlib" }}')
         def partialFilterExpression = BsonDocument.parse('{ a: { $gte: 10 } }')
-        def options2 = new IndexOptions()
-                .background(true)
+        def collation = Collation.builder().locale('en').build()
+        options.background(true)
                 .unique(true)
                 .sparse(true)
                 .name('aIndex')
@@ -68,25 +71,29 @@ class IndexOptionsSpecification extends Specification {
                 .bucketSize(200.0)
                 .storageEngine(storageEngine)
                 .partialFilterExpression(partialFilterExpression)
+                .collation(collation)
+                .wildcardProjection(wildcardProjection)
 
         then:
-        options2.isBackground()
-        options2.isUnique()
-        options2.isSparse()
-        options2.getName() == 'aIndex'
-        options2.getExpireAfter(TimeUnit.SECONDS) == 100
-        options2.getVersion() == 1
-        options2.getWeights() == weights
-        options2.getDefaultLanguage() == 'es'
-        options2.getLanguageOverride() == 'language'
-        options2.getTextVersion() == 1
-        options2.getSphereVersion() == 2
-        options2.getBits() == 1
-        options2.getMin() == -180.0
-        options2.getMax() == 180.0
-        options2.getBucketSize() == 200.0
-        options2.getStorageEngine() == storageEngine
-        options2.getPartialFilterExpression() == partialFilterExpression
+        options.isBackground()
+        options.isUnique()
+        options.isSparse()
+        options.getName() == 'aIndex'
+        options.getExpireAfter(TimeUnit.SECONDS) == 100
+        options.getVersion() == 1
+        options.getWeights() == weights
+        options.getDefaultLanguage() == 'es'
+        options.getLanguageOverride() == 'language'
+        options.getTextVersion() == 1
+        options.getSphereVersion() == 2
+        options.getBits() == 1
+        options.getMin() == -180.0
+        options.getMax() == 180.0
+        options.getBucketSize() == 200.0
+        options.getStorageEngine() == storageEngine
+        options.getPartialFilterExpression() == partialFilterExpression
+        options.getCollation() == collation
+        options.getWildcardProjection() == wildcardProjection
     }
 
     def 'should convert expireAfter'() {
@@ -113,6 +120,5 @@ class IndexOptionsSpecification extends Specification {
 
         then:
         options.getExpireAfter(TimeUnit.SECONDS) == 1
-
     }
 }

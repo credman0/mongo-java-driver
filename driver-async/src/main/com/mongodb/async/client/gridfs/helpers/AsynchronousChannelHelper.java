@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,7 +26,7 @@ import java.nio.channels.AsynchronousByteChannel;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.CompletionHandler;
 
-import static org.bson.assertions.Assertions.notNull;
+import static com.mongodb.assertions.Assertions.notNull;
 
 /**
  * A helper class to convert to {@link AsynchronousByteChannel} or {@link AsynchronousFileChannel} instances into {@link AsyncInputStream}
@@ -34,7 +34,9 @@ import static org.bson.assertions.Assertions.notNull;
  *
  * <p>Requires Java 7 or greater.</p>
  * @since 3.3
+ * @deprecated Prefer the Reactive Streams-based asynchronous driver (mongodb-driver-reactivestreams artifactId)
  */
+@Deprecated
 public final class AsynchronousChannelHelper {
 
     /**
@@ -59,6 +61,12 @@ public final class AsynchronousChannelHelper {
                         callback.onResult(null, exc);
                     }
                 });
+            }
+
+            @Override
+            public void skip(final long bytesToSkip, final SingleResultCallback<Long> callback) {
+                notNull("callback", callback);
+                callback.onResult(0L, null);
             }
 
             @Override
@@ -98,6 +106,12 @@ public final class AsynchronousChannelHelper {
                         callback.onResult(null, exc);
                     }
                 });
+            }
+
+            @Override
+            public void skip(final long bytesToSkip, final SingleResultCallback<Long> callback) {
+                notNull("callback", callback);
+                callback.onResult(0L, null);
             }
 
             @Override

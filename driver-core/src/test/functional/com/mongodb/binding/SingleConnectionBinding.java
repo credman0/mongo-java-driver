@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,10 @@ import com.mongodb.connection.Cluster;
 import com.mongodb.connection.Connection;
 import com.mongodb.connection.Server;
 import com.mongodb.connection.ServerDescription;
+import com.mongodb.internal.connection.NoOpSessionContext;
 import com.mongodb.selector.ReadPreferenceServerSelector;
 import com.mongodb.selector.WritableServerSelector;
+import com.mongodb.session.SessionContext;
 
 import static com.mongodb.ReadPreference.primary;
 import static com.mongodb.assertions.Assertions.isTrue;
@@ -103,6 +105,11 @@ public class SingleConnectionBinding implements ReadWriteBinding {
     }
 
     @Override
+    public SessionContext getSessionContext() {
+        return NoOpSessionContext.INSTANCE;
+    }
+
+    @Override
     public ConnectionSource getWriteConnectionSource() {
         isTrue("open", getCount() > 0);
         return new SingleConnectionSource(writeServer, writeConnection);
@@ -113,7 +120,7 @@ public class SingleConnectionBinding implements ReadWriteBinding {
         private final Server server;
         private int count = 1;
 
-        public SingleConnectionSource(final Server server, final Connection connection) {
+        SingleConnectionSource(final Server server, final Connection connection) {
             this.server = server;
             this.connection = connection;
             SingleConnectionBinding.this.retain();
@@ -122,6 +129,11 @@ public class SingleConnectionBinding implements ReadWriteBinding {
         @Override
         public ServerDescription getServerDescription() {
             return server.getDescription();
+        }
+
+        @Override
+        public SessionContext getSessionContext() {
+            return NoOpSessionContext.INSTANCE;
         }
 
         @Override

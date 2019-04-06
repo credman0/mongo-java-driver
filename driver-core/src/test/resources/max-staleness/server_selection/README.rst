@@ -26,7 +26,9 @@ YAML files contain the following setup for each test:
 
     - ``avg_rtt_ms``: average round trip time in milliseconds [1]_
 
-    - ``lastWriteDate``: milliseconds
+    - ``lastWrite``: subdocument
+
+      - ``lastWriteDate``: nonzero int64, milliseconds since some past time
 
     - ``maxWireVersion``: an int
 
@@ -39,7 +41,7 @@ Configure it with the heartbeatFrequencyMS specified by the test,
 or accept the driver's default heartbeatFrequencyMS if the test omits this field.
 
 (Single-threaded and multi-threaded clients now make heartbeatFrequencyMS configurable.
-This is a change in Server Discovery and Monitoring to support maxStalenessMS.
+This is a change in Server Discovery and Monitoring to support maxStalenessSeconds.
 Before, multi-threaded clients were allowed to make it configurable or not.)
 
 For each test, create a new TopologyDescription object initialized with the

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,28 +22,51 @@ import com.mongodb.OperationFunctionalSpecification
 import com.mongodb.WriteConcern
 import spock.lang.IgnoreIf
 
-import static com.mongodb.ClusterFixture.executeAsync
 import static com.mongodb.ClusterFixture.getBinding
 import static com.mongodb.ClusterFixture.isDiscoverableReplicaSet
 import static com.mongodb.ClusterFixture.serverVersionAtLeast
 import static com.mongodb.MongoCredential.createMongoCRCredential
-import static java.util.Arrays.asList
+import static com.mongodb.MongoCredential.createScramSha1Credential
+import static com.mongodb.MongoCredential.createScramSha256Credential
+
 
 class DropUserOperationSpecification extends OperationFunctionalSpecification {
+
+    @IgnoreIf({ !serverVersionAtLeast(3, 0) })
     def 'should delete user without error'() {
         given:
-        def credential = createMongoCRCredential('userToDrop', databaseName, '123'.toCharArray())
+        def credential = createScramSha1Credential('userToDrop', databaseName, '123'.toCharArray())
         new CreateUserOperation(credential, true).execute(getBinding())
+        DropUserOperation operation = new DropUserOperation(databaseName, credential.userName)
 
         when:
-        DropUserOperation operation = new DropUserOperation(databaseName, credential.userName)
-        operation.execute(getBinding())
+        execute(operation, async)
 
         then:
         notThrown(MongoException)
+
+        where:
+        async << [true, false]
     }
 
-    @IgnoreIf({ !serverVersionAtLeast(asList(3, 3, 8)) || !isDiscoverableReplicaSet() })
+    @IgnoreIf({ !serverVersionAtLeast(4, 0) })
+    def 'should delete user without error SHA_256'() {
+        given:
+        def credential = createScramSha256Credential('userToDrop', databaseName, '123'.toCharArray())
+        new CreateUserOperation(credential, true).execute(getBinding())
+        DropUserOperation operation = new DropUserOperation(databaseName, credential.userName)
+
+        when:
+        execute(operation, async)
+
+        then:
+        notThrown(MongoException)
+
+        where:
+        async << [true, false]
+    }
+
+    @IgnoreIf({ !serverVersionAtLeast(3, 4) || !isDiscoverableReplicaSet() })
     def 'should throw MongoCommandException on write concern error'() {
         given:
         def credential = createMongoCRCredential('userToDrop', databaseName, '123'.toCharArray())
@@ -51,7 +74,7 @@ class DropUserOperationSpecification extends OperationFunctionalSpecification {
         def operation = new DropUserOperation(databaseName, credential.userName, new WriteConcern(5))
 
         when:
-        async ? executeAsync(operation) : operation.execute(getBinding())
+        execute(operation, async)
 
         then:
         def ex = thrown(MongoWriteConcernException)

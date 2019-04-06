@@ -1,9 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,6 +20,8 @@ import com.mongodb.connection.ConnectionDescription;
 import org.bson.BsonDocument;
 
 import java.util.concurrent.TimeUnit;
+
+import static com.mongodb.assertions.Assertions.isTrueArgument;
 
 /**
  * An event representing the completion of a MongoDB database command.
@@ -34,12 +38,13 @@ public final class CommandSucceededEvent extends CommandEvent {
      * @param connectionDescription the connection description
      * @param commandName the command name
      * @param response the command response
-     * @param elapsedTimeNanos the elapsed time in nanoseconds for the operation to complete
+     * @param elapsedTimeNanos the non-negative elapsed time in nanoseconds for the operation to complete
      */
     public CommandSucceededEvent(final int requestId, final ConnectionDescription connectionDescription,
                                  final String commandName, final BsonDocument response, final long elapsedTimeNanos) {
         super(requestId, connectionDescription, commandName);
         this.response = response;
+        isTrueArgument("elapsed time is not negative", elapsedTimeNanos >= 0);
         this.elapsedTimeNanos = elapsedTimeNanos;
     }
 

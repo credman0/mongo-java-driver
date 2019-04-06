@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package com.mongodb.event;
@@ -21,7 +20,7 @@ import com.mongodb.connection.ConnectionId;
 
 import java.util.concurrent.TimeUnit;
 
-import static com.mongodb.assertions.Assertions.isTrue;
+import static com.mongodb.assertions.Assertions.isTrueArgument;
 import static com.mongodb.assertions.Assertions.notNull;
 
 /**
@@ -38,12 +37,12 @@ public final class ServerHeartbeatFailedEvent {
      * Construct an instance.
      *
      * @param connectionId the non-null connectionId
-     * @param elapsedTimeNanos the positive elapsed time in nanoseconds
+     * @param elapsedTimeNanos the non-negative elapsed time in nanoseconds
      * @param throwable the non-null exception that caused the failure
      */
     public ServerHeartbeatFailedEvent(final ConnectionId connectionId, final long elapsedTimeNanos, final Throwable throwable) {
         this.connectionId = notNull("connectionId", connectionId);
-        isTrue("elapsed time is positive", elapsedTimeNanos > 0);
+        isTrueArgument("elapsed time is not negative", elapsedTimeNanos >= 0);
         this.elapsedTimeNanos = elapsedTimeNanos;
         this.throwable = notNull("throwable", throwable);
     }

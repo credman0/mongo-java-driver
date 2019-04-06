@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import com.mongodb.binding.ConnectionSource
 import com.mongodb.client.model.CreateCollectionOptions
 import com.mongodb.connection.Connection
 import com.mongodb.connection.QueryResult
-import com.mongodb.internal.validator.NoOpFieldNameValidator
 import org.bson.BsonBoolean
 import org.bson.BsonDocument
 import org.bson.BsonInt32
@@ -41,12 +40,13 @@ import spock.lang.IgnoreIf
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+import static com.mongodb.ClusterFixture.checkReferenceCountReachesTarget
 import static com.mongodb.ClusterFixture.getBinding
 import static com.mongodb.ClusterFixture.isDiscoverableReplicaSet
 import static com.mongodb.ClusterFixture.isSharded
 import static com.mongodb.ClusterFixture.serverVersionAtLeast
 import static com.mongodb.operation.OperationHelper.cursorDocumentToQueryResult
-import static com.mongodb.operation.OperationHelper.serverIsAtLeastVersionThreeDotTwo
+import static com.mongodb.internal.operation.ServerVersionHelper.serverIsAtLeastVersionThreeDotTwo
 import static java.util.Arrays.asList
 import static org.junit.Assert.assertEquals
 import static org.junit.Assert.fail
@@ -68,6 +68,7 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
 
     def cleanup() {
         cursor?.close()
+        connectionSource?.release()
     }
 
     def 'server cursor should not be null'() {
@@ -206,7 +207,7 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
             try {
                 sleep(500)
                 collectionHelper.insertDocuments(new DocumentCodec(), new Document('_id', 2).append('ts', new BsonTimestamp(6, 0)))
-            } catch (interrupt) {
+            } catch (ignored) {
                 //pass
             } finally {
                 latch.countDown()
@@ -245,6 +246,8 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
 
         then:
         cursor.tryNext().iterator().next().get('_id') == 1
+
+        then:
         !cursor.tryNext()
 
         when:
@@ -256,7 +259,33 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
         nextBatch.iterator().next().get('_id') == 2
     }
 
-    @IgnoreIf({ !serverVersionAtLeast([3, 2, 0]) || isSharded() })
+    @Category(Slow)
+    def 'hasNext should throw when cursor is closed in another thread'() {
+        collectionHelper.create(collectionName, new CreateCollectionOptions().capped(true).sizeInBytes(1000))
+        collectionHelper.insertDocuments(new DocumentCodec(), new Document('_id', 1).append('ts', new BsonTimestamp(5, 0)))
+        def firstBatch = executeQuery(new BsonDocument('ts', new BsonDocument('$gte', new BsonTimestamp(5, 0))), 0, 2, true, true);
+        cursor = new QueryBatchCursor<Document>(firstBatch, 0, 2, new DocumentCodec(), connectionSource)
+        cursor.next()
+        def latch = new CountDownLatch(1)
+
+        // wait a second then close the cursor
+        new Thread({
+            sleep(1000)
+            cursor.close()
+            latch.countDown()
+        } as Runnable).start()
+
+        when:
+        cursor.hasNext()
+
+        then:
+        thrown(Exception)
+
+        cleanup:
+        latch.await(5, TimeUnit.SECONDS)  // wait for cursor.close to complete
+    }
+
+    @IgnoreIf({ !serverVersionAtLeast(3, 2) || isSharded() })
     @Category(Slow)
     def 'test maxTimeMS'() {
         collectionHelper.create(collectionName, new CreateCollectionOptions().capped(true).sizeInBytes(1000))
@@ -293,14 +322,14 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
         cursor = new QueryBatchCursor<Document>(firstBatch, 0, 2, new DocumentCodec(), connectionSource)
 
         CountDownLatch latch = new CountDownLatch(1)
-        def seen;
+        def seen = 0
         def thread = Thread.start {
             try {
                 cursor.next()
                 seen = 1
                 cursor.next()
                 seen = 2
-            } catch (interrupt) {
+            } catch (ignored) {
                 // pass
             } finally {
                 latch.countDown()
@@ -315,8 +344,7 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
         seen == 1
     }
 
-    // 2.2 does not properly detect cursor not found, so ignoring
-    @IgnoreIf({ isSharded() && !serverVersionAtLeast([2, 4, 0]) })
+    @IgnoreIf({ isSharded() })
     def 'should kill cursor if limit is reached on initial query'() throws InterruptedException {
         given:
         def firstBatch = executeQuery(5)
@@ -334,8 +362,7 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
         connection?.release()
     }
 
-    @IgnoreIf({ isSharded() && !serverVersionAtLeast([2, 4, 0]) })
-    // 2.2 does not properly detect cursor not found, so ignoring
+    @IgnoreIf({ isSharded() })
     @Category(Slow)
     def 'should kill cursor if limit is reached on get more'() throws InterruptedException {
         given:
@@ -353,6 +380,35 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
 
         then:
         thrown(MongoCursorNotFoundException)
+    }
+
+    def 'should release connection source if limit is reached on initial query'() throws InterruptedException {
+        given:
+        def firstBatch = executeQuery(5)
+        def connection = connectionSource.getConnection()
+
+        when:
+        cursor = new QueryBatchCursor<Document>(firstBatch, 5, 0, 0, new DocumentCodec(), connectionSource, connection)
+
+        then:
+        checkReferenceCountReachesTarget(connectionSource, 1)
+
+        cleanup:
+        connection?.release()
+    }
+
+    def 'should release connection source if limit is reached on get more'() throws InterruptedException {
+        given:
+        def firstBatch = executeQuery(3)
+
+        cursor = new QueryBatchCursor<Document>(firstBatch, 5, 3, new DocumentCodec(), connectionSource)
+
+        when:
+        cursor.next()
+        cursor.next()
+
+        then:
+        checkReferenceCountReachesTarget(connectionSource, 1)
     }
 
     def 'test limit with get more'() {
@@ -454,9 +510,8 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
         thrown(NoSuchElementException)
     }
 
-    // 2.2 does not properly detect cursor not found, so ignoring
     @SuppressWarnings('BracesForTryCatchFinally')
-    @IgnoreIf({ isSharded() && !serverVersionAtLeast([2, 4, 0]) })
+    @IgnoreIf({ isSharded() })
     def 'should throw cursor not found exception'() {
         given:
         def firstBatch = executeQuery(2)
@@ -480,53 +535,29 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
         }
     }
 
-    // More of an integration test to ensure proper server behavior, as there is no specific driver code in the cursor implementation to
-    // enable reading from a secondary.  But since the cursor, as per spec, does not set the slaveOk flag for the getMore command, this
-    // test ensures that the server does not require it.
-    @IgnoreIf({ !isDiscoverableReplicaSet() })
-    def 'should get more from a secondary'() {
-        given:
-        connectionSource = getBinding(ReadPreference.secondary()).getReadConnectionSource()
-
-        def firstBatch = executeQuery(2, true)
-
-        // wait for replication
-        while (firstBatch.cursor == null ) {
-            firstBatch = executeQuery(2, true)
-        }
-
-        when:
-        cursor = new QueryBatchCursor<Document>(firstBatch, 0, 2, new DocumentCodec(), connectionSource)
-        cursor.next()
-
-        then:
-        cursor.next()
-    }
-
-
     private QueryResult<Document> executeQuery() {
         executeQuery(0)
     }
 
     private QueryResult<Document> executeQuery(int batchSize) {
-        executeQuery(new BsonDocument(), 0, batchSize, false, false, false)
+        executeQuery(new BsonDocument(), 0, batchSize, false, false, ReadPreference.primary())
     }
 
-    private QueryResult<Document> executeQuery(int batchSize, boolean slaveOk) {
-        executeQuery(new BsonDocument(), 0, batchSize, false, false, slaveOk)
+    private QueryResult<Document> executeQuery(int batchSize, ReadPreference readPreference) {
+        executeQuery(new BsonDocument(), 0, batchSize, false, false, readPreference)
     }
 
     private QueryResult<Document> executeQuery(int limit, int batchSize) {
-        executeQuery(new BsonDocument(), limit, batchSize, false, false, false)
+        executeQuery(new BsonDocument(), limit, batchSize, false, false, ReadPreference.primary())
     }
 
 
     private QueryResult<Document> executeQuery(BsonDocument filter, int limit, int batchSize, boolean tailable, boolean awaitData) {
-        executeQuery(filter, limit, batchSize, tailable, awaitData, false)
+        executeQuery(filter, limit, batchSize, tailable, awaitData, ReadPreference.primary())
     }
 
     private QueryResult<Document> executeQuery(BsonDocument filter, int limit, int batchSize, boolean tailable, boolean awaitData,
-                                               boolean slaveOk) {
+                                               ReadPreference readPreference) {
         def connection = connectionSource.getConnection()
         try {
             if (serverIsAtLeastVersionThreeDotTwo(connection.getDescription())) {
@@ -546,12 +577,13 @@ class QueryBatchCursorFunctionalSpecification extends OperationFunctionalSpecifi
                 }
 
                 def response = connection.command(getDatabaseName(), findCommand,
-                                                  slaveOk, new NoOpFieldNameValidator(),
-                                                  CommandResultDocumentCodec.create(new DocumentCodec(), 'firstBatch'))
+                        NO_OP_FIELD_NAME_VALIDATOR, readPreference,
+                        CommandResultDocumentCodec.create(new DocumentCodec(), 'firstBatch'),
+                        connectionSource.sessionContext)
                 cursorDocumentToQueryResult(response.getDocument('cursor'), connection.getDescription().getServerAddress())
             } else {
                 connection.query(getNamespace(), filter, null, 0, limit, batchSize,
-                                 slaveOk, tailable, awaitData, false, false, false,
+                                 readPreference.isSlaveOk(), tailable, awaitData, false, false, false,
                                  new DocumentCodec());
             }
         } finally {

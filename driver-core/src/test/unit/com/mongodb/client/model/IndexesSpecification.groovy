@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -9,32 +9,28 @@
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONObjectITIONS OF ANY KINObject, either express or implied.
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
 
 package com.mongodb.client.model
 
-import org.bson.BsonDocument
-import org.bson.codecs.BsonValueCodecProvider
-import org.bson.codecs.ValueCodecProvider
-import org.bson.conversions.Bson
+
 import spock.lang.Specification
 
+import static com.mongodb.client.model.BsonHelper.toBson
 import static com.mongodb.client.model.Indexes.ascending
 import static com.mongodb.client.model.Indexes.compoundIndex
 import static com.mongodb.client.model.Indexes.descending
 import static com.mongodb.client.model.Indexes.geo2d
 import static com.mongodb.client.model.Indexes.geo2dsphere
 import static com.mongodb.client.model.Indexes.geoHaystack
-import static com.mongodb.client.model.Indexes.text
 import static com.mongodb.client.model.Indexes.hashed
+import static com.mongodb.client.model.Indexes.text
 import static org.bson.BsonDocument.parse
-import static org.bson.codecs.configuration.CodecRegistries.fromProviders
 
 class IndexesSpecification extends Specification {
-    def registry = fromProviders([new BsonValueCodecProvider(), new ValueCodecProvider()])
 
     def 'ascending'() {
         expect:
@@ -69,7 +65,8 @@ class IndexesSpecification extends Specification {
 
     def 'text'() {
         expect:
-        toBson(text('x',)) == parse('{x : "text"}')
+        toBson(text('x')) == parse('{x : "text"}')
+        toBson(text()) == parse('{ "$**" : "text"}')
     }
 
     def 'hashed'() {
@@ -85,7 +82,27 @@ class IndexesSpecification extends Specification {
         toBson(compoundIndex(ascending('x', 'y'), descending('a', 'b'))) == parse('{x : 1, y : 1, a : -1, b : -1}')
     }
 
-    def toBson(Bson bson) {
-        bson.toBsonDocument(BsonDocument, registry)
+    def 'should test equals on CompoundIndex'() {
+        expect:
+        compoundIndex([ascending('x'), descending('y')])
+                .equals(compoundIndex([ascending('x'), descending('y')]))
+        compoundIndex(ascending('x'), descending('y'))
+                .equals(compoundIndex(ascending('x'), descending('y')))
+        compoundIndex(ascending('x'), descending('y'), descending('x'))
+                .equals(compoundIndex(ascending('x'), descending('y'), descending('x')))
+        compoundIndex(ascending('x', 'y'), descending('a', 'b'))
+                .equals(compoundIndex(ascending('x', 'y'), descending('a', 'b')))
+    }
+
+    def 'should test hashCode on CompoundIndex'() {
+        expect:
+        compoundIndex([ascending('x'), descending('y')]).hashCode() ==
+                compoundIndex([ascending('x'), descending('y')]).hashCode()
+        compoundIndex(ascending('x'), descending('y')).hashCode() ==
+                compoundIndex(ascending('x'), descending('y')).hashCode()
+        compoundIndex(ascending('x'), descending('y'), descending('x')).hashCode() ==
+                compoundIndex(ascending('x'), descending('y'), descending('x')).hashCode()
+        compoundIndex(ascending('x', 'y'), descending('a', 'b')).hashCode() ==
+                compoundIndex(ascending('x', 'y'), descending('a', 'b')).hashCode()
     }
 }

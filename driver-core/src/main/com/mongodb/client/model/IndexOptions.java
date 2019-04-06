@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package com.mongodb.client.model;
 
+import com.mongodb.lang.Nullable;
 import org.bson.conversions.Bson;
 
 import java.util.concurrent.TimeUnit;
@@ -44,6 +45,8 @@ public class IndexOptions {
     private Double bucketSize;
     private Bson storageEngine;
     private Bson partialFilterExpression;
+    private Collation collation;
+    private Bson wildcardProjection;
 
     /**
      * Create the index in the background
@@ -90,6 +93,7 @@ public class IndexOptions {
      *
      * @return the name of the index
      */
+    @Nullable
     public String getName() {
         return name;
     }
@@ -100,7 +104,7 @@ public class IndexOptions {
      * @param name of the index
      * @return this
      */
-    public IndexOptions name(final String name) {
+    public IndexOptions name(@Nullable final String name) {
         this.name = name;
         return this;
     }
@@ -132,6 +136,7 @@ public class IndexOptions {
      * @param timeUnit the time unit
      * @mongodb.driver.manual tutorial/expire-data TTL
      */
+    @Nullable
     public Long getExpireAfter(final TimeUnit timeUnit) {
         if (expireAfterSeconds == null) {
             return null;
@@ -147,7 +152,7 @@ public class IndexOptions {
      * @return this
      * @mongodb.driver.manual tutorial/expire-data TTL
      */
-    public IndexOptions expireAfter(final Long expireAfter, final TimeUnit timeUnit) {
+    public IndexOptions expireAfter(@Nullable final Long expireAfter, final TimeUnit timeUnit) {
         if (expireAfter == null) {
             this.expireAfterSeconds = null;
         } else {
@@ -161,6 +166,7 @@ public class IndexOptions {
      *
      * @return the index version number
      */
+    @Nullable
     public Integer getVersion() {
         return this.version;
     }
@@ -171,7 +177,7 @@ public class IndexOptions {
      * @param version the index version number
      * @return this
      */
-    public IndexOptions version(final Integer version) {
+    public IndexOptions version(@Nullable final Integer version) {
         this.version = version;
         return this;
     }
@@ -185,6 +191,7 @@ public class IndexOptions {
      * @return the weighting object
      * @mongodb.driver.manual tutorial/control-results-of-text-search Control Search Results with Weights
      */
+    @Nullable
     public Bson getWeights() {
         return weights;
     }
@@ -199,7 +206,7 @@ public class IndexOptions {
      * @return this
      * @mongodb.driver.manual tutorial/control-results-of-text-search Control Search Results with Weights
      */
-    public IndexOptions weights(final Bson weights) {
+    public IndexOptions weights(@Nullable final Bson weights) {
         this.weights = weights;
         return this;
     }
@@ -212,6 +219,7 @@ public class IndexOptions {
      * @return the language for a text index.
      * @mongodb.driver.manual reference/text-search-languages Text Search languages
      */
+    @Nullable
     public String getDefaultLanguage() {
         return defaultLanguage;
     }
@@ -225,7 +233,7 @@ public class IndexOptions {
      * @return this
      * @mongodb.driver.manual reference/text-search-languages Text Search languages
      */
-    public IndexOptions defaultLanguage(final String defaultLanguage) {
+    public IndexOptions defaultLanguage(@Nullable final String defaultLanguage) {
         this.defaultLanguage = defaultLanguage;
         return this;
     }
@@ -238,6 +246,7 @@ public class IndexOptions {
      * @return the name of the field that contains the language string.
      * @mongodb.driver.manual tutorial/specify-language-for-text-index/#specify-language-field-text-index-example Language override
      */
+    @Nullable
     public String getLanguageOverride() {
         return languageOverride;
     }
@@ -251,7 +260,7 @@ public class IndexOptions {
      * @return this
      * @mongodb.driver.manual tutorial/specify-language-for-text-index/#specify-language-field-text-index-example Language override
      */
-    public IndexOptions languageOverride(final String languageOverride) {
+    public IndexOptions languageOverride(@Nullable final String languageOverride) {
         this.languageOverride = languageOverride;
         return this;
     }
@@ -261,6 +270,7 @@ public class IndexOptions {
      *
      * @return the text index version number.
      */
+    @Nullable
     public Integer getTextVersion() {
         return textVersion;
     }
@@ -271,7 +281,7 @@ public class IndexOptions {
      * @param textVersion the text index version number.
      * @return this
      */
-    public IndexOptions textVersion(final Integer textVersion) {
+    public IndexOptions textVersion(@Nullable final Integer textVersion) {
         this.textVersion = textVersion;
         return this;
     }
@@ -281,6 +291,7 @@ public class IndexOptions {
      *
      * @return the 2dsphere index version number
      */
+    @Nullable
     public Integer getSphereVersion() {
         return sphereVersion;
     }
@@ -291,7 +302,7 @@ public class IndexOptions {
      * @param sphereVersion the 2dsphere index version number.
      * @return this
      */
-    public IndexOptions sphereVersion(final Integer sphereVersion) {
+    public IndexOptions sphereVersion(@Nullable final Integer sphereVersion) {
         this.sphereVersion = sphereVersion;
         return this;
     }
@@ -301,6 +312,7 @@ public class IndexOptions {
      *
      * @return the number of precision of the stored geohash value
      */
+    @Nullable
     public Integer getBits() {
         return bits;
     }
@@ -311,7 +323,7 @@ public class IndexOptions {
      * @param bits the number of precision of the stored geohash value
      * @return this
      */
-    public IndexOptions bits(final Integer bits) {
+    public IndexOptions bits(@Nullable final Integer bits) {
         this.bits = bits;
         return this;
     }
@@ -321,6 +333,7 @@ public class IndexOptions {
      *
      * @return the lower inclusive boundary for the longitude and latitude values.
      */
+    @Nullable
     public Double getMin() {
         return min;
     }
@@ -331,7 +344,7 @@ public class IndexOptions {
      * @param min the lower inclusive boundary for the longitude and latitude values
      * @return this
      */
-    public IndexOptions min(final Double min) {
+    public IndexOptions min(@Nullable final Double min) {
         this.min = min;
         return this;
     }
@@ -341,6 +354,7 @@ public class IndexOptions {
      *
      * @return the upper inclusive boundary for the longitude and latitude values.
      */
+    @Nullable
     public Double getMax() {
         return max;
     }
@@ -351,7 +365,7 @@ public class IndexOptions {
      * @param max the upper inclusive boundary for the longitude and latitude values
      * @return this
      */
-    public IndexOptions max(final Double max) {
+    public IndexOptions max(@Nullable final Double max) {
         this.max = max;
         return this;
     }
@@ -362,6 +376,7 @@ public class IndexOptions {
      * @return the specified the number of units within which to group the location values for geoHaystack Indexes
      * @mongodb.driver.manual core/geohaystack/ geoHaystack Indexes
      */
+    @Nullable
     public Double getBucketSize() {
         return bucketSize;
     }
@@ -373,7 +388,7 @@ public class IndexOptions {
      * @return this
      * @mongodb.driver.manual core/geohaystack/ geoHaystack Indexes
      */
-    public IndexOptions bucketSize(final Double bucketSize) {
+    public IndexOptions bucketSize(@Nullable final Double bucketSize) {
         this.bucketSize = bucketSize;
         return this;
     }
@@ -384,6 +399,7 @@ public class IndexOptions {
      * @return the storage engine options
      * @mongodb.server.release 3.0
      */
+    @Nullable
     public Bson getStorageEngine() {
         return storageEngine;
     }
@@ -395,7 +411,7 @@ public class IndexOptions {
      * @return this
      * @mongodb.server.release 3.0
      */
-    public IndexOptions storageEngine(final Bson storageEngine) {
+    public IndexOptions storageEngine(@Nullable final Bson storageEngine) {
         this.storageEngine = storageEngine;
         return this;
     }
@@ -407,6 +423,7 @@ public class IndexOptions {
      * @mongodb.server.release 3.2
      * @since 3.2
      */
+    @Nullable
     public Bson getPartialFilterExpression() {
         return partialFilterExpression;
     }
@@ -419,8 +436,83 @@ public class IndexOptions {
      * @mongodb.server.release 3.2
      * @since 3.2
      */
-    public IndexOptions partialFilterExpression(final Bson partialFilterExpression) {
+    public IndexOptions partialFilterExpression(@Nullable final Bson partialFilterExpression) {
         this.partialFilterExpression = partialFilterExpression;
         return this;
+    }
+
+    /**
+     * Returns the collation options
+     *
+     * @return the collation options
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    @Nullable
+    public Collation getCollation() {
+        return collation;
+    }
+
+    /**
+     * Sets the collation options
+     *
+     * <p>A null value represents the server default.</p>
+     * @param collation the collation options to use
+     * @return this
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    public IndexOptions collation(@Nullable final Collation collation) {
+        this.collation = collation;
+        return this;
+    }
+
+    /**
+     * Gets the wildcard projection of a wildcard index
+     *
+     * @return the wildcard projection
+     * @mongodb.server.release 4.2
+     * @since 3.10
+     */
+    public Bson getWildcardProjection() {
+        return wildcardProjection;
+    }
+
+    /**
+     * Sets the wildcard projection of a wildcard index
+     *
+     * @param wildcardProjection the wildcard projection
+     * @return this
+     * @mongodb.server.release 4.2
+     * @since 3.10
+     */
+    public IndexOptions wildcardProjection(final Bson wildcardProjection) {
+        this.wildcardProjection = wildcardProjection;
+        return this;
+    }
+
+    @Override
+    public String toString() {
+        return "IndexOptions{"
+                + "background=" + background
+                + ", unique=" + unique
+                + ", name='" + name + '\''
+                + ", sparse=" + sparse
+                + ", expireAfterSeconds=" + expireAfterSeconds
+                + ", version=" + version
+                + ", weights=" + weights
+                + ", defaultLanguage='" + defaultLanguage + '\''
+                + ", languageOverride='" + languageOverride + '\''
+                + ", textVersion=" + textVersion
+                + ", sphereVersion=" + sphereVersion
+                + ", bits=" + bits
+                + ", min=" + min
+                + ", max=" + max
+                + ", bucketSize=" + bucketSize
+                + ", storageEngine=" + storageEngine
+                + ", partialFilterExpression=" + partialFilterExpression
+                + ", collation=" + collation
+                + ", wildcardProjection=" + wildcardProjection
+                + '}';
     }
 }

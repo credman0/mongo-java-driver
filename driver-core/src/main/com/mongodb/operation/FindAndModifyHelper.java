@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,13 @@ package com.mongodb.operation;
 import com.mongodb.MongoWriteConcernException;
 import com.mongodb.ServerAddress;
 import com.mongodb.WriteConcernResult;
-import com.mongodb.bulk.WriteConcernError;
 import com.mongodb.operation.CommandOperationHelper.CommandTransformer;
 import org.bson.BsonBoolean;
 import org.bson.BsonDocument;
 import org.bson.BsonInt32;
+
+import static com.mongodb.internal.operation.WriteConcernHelper.createWriteConcernError;
+import static com.mongodb.internal.operation.WriteConcernHelper.hasWriteConcernError;
 
 final class FindAndModifyHelper {
 
@@ -32,11 +34,10 @@ final class FindAndModifyHelper {
             @SuppressWarnings("unchecked")
             @Override
             public T apply(final BsonDocument result, final ServerAddress serverAddress) {
-                if (result.containsKey("writeConcernError")) {
-                    throw new MongoWriteConcernException(createWriteConcernError(result.getDocument("writeConcernError")),
-                                                         createWriteConcernResult(result.getDocument("lastErrorObject",
-                                                                                                     new BsonDocument())),
-                                                         serverAddress);
+                if (hasWriteConcernError(result)) {
+                    throw new MongoWriteConcernException(
+                            createWriteConcernError(result.getDocument("writeConcernError")),
+                            createWriteConcernResult(result.getDocument("lastErrorObject", new BsonDocument())), serverAddress);
                 }
 
                 if (!result.isDocument("value")) {
@@ -45,12 +46,6 @@ final class FindAndModifyHelper {
                 return BsonDocumentWrapperHelper.toDocument(result.getDocument("value", null));
             }
         };
-    }
-
-    private static WriteConcernError createWriteConcernError(final BsonDocument writeConcernErrorDocument) {
-        return new WriteConcernError(writeConcernErrorDocument.getNumber("code").intValue(),
-                                     writeConcernErrorDocument.getString("errmsg").getValue(),
-                                     writeConcernErrorDocument.getDocument("errInfo", new BsonDocument()));
     }
 
     private static WriteConcernResult createWriteConcernResult(final BsonDocument result) {

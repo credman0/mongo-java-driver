@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@ import com.mongodb.event.ServerListener;
 import com.mongodb.event.ServerMonitorListener;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static com.mongodb.assertions.Assertions.notNull;
+import static java.util.Collections.unmodifiableList;
 
 /**
  * Settings relating to monitoring of each server.
@@ -51,14 +51,46 @@ public class ServerSettings {
     }
 
     /**
+     * Creates a builder instance.
+     *
+     * @param serverSettings existing ServerSettings to default the builder settings on.
+     * @return a builder
+     * @since 3.5
+     */
+    public static Builder builder(final ServerSettings serverSettings) {
+        return builder().applySettings(serverSettings);
+    }
+
+    /**
      * A builder for the settings.
      */
     @NotThreadSafe
-    public static class Builder {
+    public static final class Builder {
         private long heartbeatFrequencyMS = 10000;
         private long minHeartbeatFrequencyMS = 500;
-        private final List<ServerListener> serverListeners = new ArrayList<ServerListener>();
-        private final List<ServerMonitorListener> serverMonitorListeners = new ArrayList<ServerMonitorListener>();
+        private List<ServerListener> serverListeners = new ArrayList<ServerListener>();
+        private List<ServerMonitorListener> serverMonitorListeners = new ArrayList<ServerMonitorListener>();
+
+        private Builder() {
+        }
+
+        /**
+         * Applies the serverSettings to the builder
+         *
+         * <p>Note: Overwrites all existing settings</p>
+         *
+         * @param serverSettings the serverSettings
+         * @return this
+         * @since 3.7
+         */
+        public Builder applySettings(final ServerSettings serverSettings) {
+            notNull("serverSettings", serverSettings);
+            heartbeatFrequencyMS = serverSettings.heartbeatFrequencyMS;
+            minHeartbeatFrequencyMS = serverSettings.minHeartbeatFrequencyMS;
+            serverListeners = new ArrayList<ServerListener>(serverSettings.serverListeners);
+            serverMonitorListeners = new ArrayList<ServerMonitorListener>(serverSettings.serverMonitorListeners);
+            return this;
+        }
 
         /**
          * Sets the frequency that the cluster monitor attempts to reach each server. The default value is 10 seconds.
@@ -112,15 +144,16 @@ public class ServerSettings {
         }
 
         /**
-         * Take the settings from the given ConnectionString and add them to the builder
+         * Takes the settings from the given {@code ConnectionString} and applies them to the builder
          *
-         * @param connectionString a URI containing details of how to connect to MongoDB
+         * @param connectionString the connection string containing details of how to connect to MongoDB
          * @return this
          * @since 3.3
          */
         public Builder applyConnectionString(final ConnectionString connectionString) {
-            if (connectionString.getHeartbeatFrequency() != null) {
-                heartbeatFrequencyMS = connectionString.getHeartbeatFrequency();
+            Integer heartbeatFrequency = connectionString.getHeartbeatFrequency();
+            if (heartbeatFrequency != null) {
+                heartbeatFrequencyMS = heartbeatFrequency;
             }
             return this;
         }
@@ -163,7 +196,7 @@ public class ServerSettings {
      * @since 3.3
      */
     public List<ServerListener> getServerListeners() {
-        return Collections.unmodifiableList(serverListeners);
+        return serverListeners;
     }
 
     /**
@@ -173,7 +206,7 @@ public class ServerSettings {
      * @since 3.3
      */
     public List<ServerMonitorListener> getServerMonitorListeners() {
-        return Collections.unmodifiableList(serverMonitorListeners);
+        return serverMonitorListeners;
     }
 
     @Override
@@ -226,7 +259,7 @@ public class ServerSettings {
     ServerSettings(final Builder builder) {
         heartbeatFrequencyMS = builder.heartbeatFrequencyMS;
         minHeartbeatFrequencyMS = builder.minHeartbeatFrequencyMS;
-        serverListeners = builder.serverListeners;
-        serverMonitorListeners = builder.serverMonitorListeners;
+        serverListeners = unmodifiableList(builder.serverListeners);
+        serverMonitorListeners = unmodifiableList(builder.serverMonitorListeners);
     }
 }

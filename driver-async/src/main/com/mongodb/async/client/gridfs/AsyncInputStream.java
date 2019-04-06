@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,7 +25,9 @@ import java.nio.ByteBuffer;
  *
  * <p>See the {@link com.mongodb.async.client.gridfs.helpers} package for adapters that create an {@code AsyncInputStream}</p>
  * @since 3.3
+ * @deprecated Prefer the Reactive Streams-based asynchronous driver (mongodb-driver-reactivestreams artifactId)
  */
+@Deprecated
 public interface AsyncInputStream {
 
     /**
@@ -36,6 +38,15 @@ public interface AsyncInputStream {
      *                 {@code -1} if there is no more data because the end of the stream has been reached.
      */
     void read(ByteBuffer dst, SingleResultCallback<Integer> callback);
+
+    /**
+     * Skips over and discards n bytes of data from this input stream.
+     * @param bytesToSkip the number of bytes to skip
+     * @param callback the callback returning the actual number of bytes skipped
+     *
+     * @since 3.10
+     */
+    void skip(long bytesToSkip, SingleResultCallback<Long> callback);
 
     /**
      * Closes the input stream

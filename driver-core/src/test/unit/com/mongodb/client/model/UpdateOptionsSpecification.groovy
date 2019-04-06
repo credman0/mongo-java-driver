@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 package com.mongodb.client.model
 
+import org.bson.BsonDocument
+import org.bson.BsonInt32
 import spock.lang.Specification
 
 class UpdateOptionsSpecification extends Specification {
@@ -26,6 +28,7 @@ class UpdateOptionsSpecification extends Specification {
         then:
         !options.isUpsert()
         options.getBypassDocumentValidation() == null
+        options.getCollation() == null
     }
 
     def 'should set upsert'() {
@@ -42,5 +45,21 @@ class UpdateOptionsSpecification extends Specification {
 
         where:
         bypassValidation << [null, true, false]
+    }
+
+    def 'should set collation'() {
+        expect:
+        new UpdateOptions().collation(collation).getCollation() == collation
+
+        where:
+        collation << [null, Collation.builder().locale('en').build()]
+    }
+
+    def 'should set array filters'() {
+        expect:
+        new UpdateOptions().arrayFilters(arrayFilters).getArrayFilters() == arrayFilters
+
+        where:
+        arrayFilters << [null, [], [new BsonDocument('a.b', new BsonInt32(1))]]
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,6 @@ class ByteBufferBsonInputSpecification extends Specification {
         expect:
         bytesRead == bytes
         stream.position == 3
-
     }
 
     def 'should read into a byte array at offset until length'() {
@@ -270,6 +269,35 @@ class ByteBufferBsonInputSpecification extends Specification {
         stream.position == 2
     }
 
+    def 'should reset to the BsonInputMark'() {
+        given:
+        def stream = new ByteBufferBsonInput(new ByteBufNIO(ByteBuffer.wrap([0x4a, 0x61, 0x76, 0x61, 0] as byte[])))
+
+        when:
+        BsonInputMark markOne = null
+        BsonInputMark markTwo = null
+
+        stream.with {
+            readByte()
+            readByte()
+            markOne = getMark(1024)
+            readByte()
+            readByte()
+            markTwo = getMark(1025)
+            readByte()
+        }
+        markOne.reset()
+
+        then:
+        stream.position == 2
+
+        when:
+        markTwo.reset()
+
+        then:
+        stream.position == 4
+    }
+
     def 'should have remaining when there are more bytes'() {
         given:
         def stream = new ByteBufferBsonInput(new ByteBufNIO(ByteBuffer.wrap([0x4a, 0x61, 0x76, 0x61, 0] as byte[])))
@@ -389,6 +417,17 @@ class ByteBufferBsonInputSpecification extends Specification {
     def 'should throw BsonSerializationException if a BSON string is not null-terminated'() {
         given:
         def stream = new ByteBufferBsonInput(new ByteBufNIO(ByteBuffer.wrap([4, 0, 0, 0, 41, 42, 43, 99] as byte[])))
+
+        when:
+        stream.readString()
+
+        then:
+        thrown(BsonSerializationException)
+    }
+
+    def 'should throw BsonSerializationException if a one-byte BSON string is not null-terminated'() {
+        given:
+        def stream = new ByteBufferBsonInput(new ByteBufNIO(ByteBuffer.wrap([2, 0, 0, 0, 1, 3] as byte[])))
 
         when:
         stream.readString()

@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 
 <!--
-  ~ Copyright (c) 2008-2014 MongoDB, Inc.
+  ~ Copyright 2008-present MongoDB, Inc.
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -21,16 +21,37 @@
         "http://www.puppycrawl.com/dtds/suppressions_1_1.dtd">
 
 <suppressions>
+
+    <suppress checks="VisibilityModifier" files="com[\\/]mongodb[\\/]internal[\\/]connection[\\/]tlschannel[\\/]"/>
+
     <suppress checks="MethodLength" files="QuickTour"/>
     <suppress checks="Regexp" files="QuickTour"/>
 
+    <suppress checks="MethodLength" files="PojoRoundTripTest"/>
+
+    <suppress checks="JavadocPackage" files="com[\\/]mongodb[\\/][^\\/]*\.java"/>
+    <suppress checks="JavadocPackage" files="com[\\/]mongodb[\\/]client[\\/][^\\/]*\.java"/>
+    <suppress checks="JavadocPackage" files="com[\\/]mongodb[\\/]client[\\/]model[\\/][^\\/]*\.java"/>
+    <suppress checks="JavadocPackage" files="org[\\/]bson[\\/][^\\/]*\.java"/>
+    <suppress checks="JavadocPackage" files="org[\\/]bson[\\/]io[\\/][^\\/]*\.java"/>
+    <suppress checks="JavadocPackage" files="org[\\/]bson[\\/]types[\\/][^\\/]*\.java"/>
+
     <suppress checks="Javadoc*" files="com[\\/]mongodb[\\/]internal[\\/]"/>
+    <suppress checks="Javadoc*" files="com[\\/]mongodb[\\/]client[\\/]internal[\\/]"/>
+    <suppress checks="Javadoc*" files="org[\\/]bson[\\/]internal[\\/]"/>
 
     <!--Do not check primer classes -->
     <suppress checks="Javadoc*" files=".*primer.*"/>
     <suppress checks="Regexp" files=".*primer.*"/>
     <suppress checks="AvoidStarImportCheck" files=".*primer.*"/>
     <suppress checks="VisibilityModifierCheck" files=".*primer.*"/>
+
+    <!-- Allow printStackTrace in this file -->
+    <suppress checks="Regexp" files="CallbackResultHolder"/>
+
+    <!--Do not check documentation tests classes -->
+    <suppress checks="Javadoc*" files=".*documentation.*"/>
+    <suppress checks="Regexp" files=".*documentation.*"/>
 
     <!--Do not check test classes -->
     <suppress checks="Javadoc*" files=".*test.*"/>
@@ -44,6 +65,9 @@
 
     <suppress checks="ParameterNumber" files="Connection"/>
     <suppress checks="ParameterNumber" files="DefaultServer"/>
+    <suppress checks="ParameterNumber" files="DefaultClusterFactory"/>
+    <suppress checks="ParameterNumber" files="DefaultClusterableServerFactory"/>
+    <suppress checks="ParameterNumber" files="Operations"/>
 
     <!--Legacy code that has not yet been cleaned-->
     <suppress checks="FinalClass" files="AggregationOptions"/>
@@ -93,9 +117,24 @@
     <suppress checks="HideUtilityClassConstructor" files="JSON"/>
     <suppress checks="HideUtilityClassConstructor" files="QuickTour"/>
     <suppress checks="HideUtilityClassConstructor" files="Util"/>
+    <suppress checks="HideUtilityClassConstructor" files="DatabaseTestCase"/>
+
+    <suppress checks="ParameterNumber" files="BulkWriteBatch"/>
 
     <!-- Alternative copyrights -->
     <suppress checks="RegexpSingleline" files="Immutable"/>
     <suppress checks="RegexpSingleline" files="NotThreadSafe"/>
     <suppress checks="RegexpSingleline" files="ThreadSafe"/>
+
+    <!-- Pojo test entities -->
+    <suppress checks="ConstantName" files=".*org[\\/]bson[\\/]codecs[\\/]pojo[\\/]entities[\\/].*"/>
+    <suppress checks="VisibilityModifier" files=".*org[\\/]bson[\\/]codecs[\\/]pojo[\\/]entities[\\/].*"/>
+    <suppress checks="ParameterNumber" files=".*org[\\/]bson[\\/]codecs[\\/]pojo[\\/]entities[\\/].*"/>
+
+    <!-- Pojo test bench -->
+    <suppress checks="MemberName" files=".*org[\\/]bson[\\/]codecs[\\/]pojo[\\/]bench[\\/].*"/>
+    <suppress checks="MethodName" files=".*org[\\/]bson[\\/]codecs[\\/]pojo[\\/]bench[\\/].*"/>
+    <suppress checks="ParameterName" files=".*org[\\/]bson[\\/]codecs[\\/]pojo[\\/]bench[\\/].*"/>
+    <suppress checks="Regexp" files=".*org[\\/]bson[\\/]codecs[\\/]pojo[\\/]bench[\\/].*"/>
+
 </suppressions>

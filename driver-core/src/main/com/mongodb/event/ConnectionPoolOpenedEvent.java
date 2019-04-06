@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package com.mongodb.event;
 
-import com.mongodb.annotations.Beta;
 import com.mongodb.connection.ConnectionPoolSettings;
 import com.mongodb.connection.ServerId;
 
@@ -24,8 +23,9 @@ import static com.mongodb.assertions.Assertions.notNull;
 
 /**
  * An event signifying the opening of a connection pool.
+ *
+ * @since 3.5
  */
-@Beta
 public final class ConnectionPoolOpenedEvent {
     private final ServerId serverId;
     private final ConnectionPoolSettings settings;

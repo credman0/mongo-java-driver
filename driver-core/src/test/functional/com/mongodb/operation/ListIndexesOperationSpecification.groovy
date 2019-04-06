@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@ import com.mongodb.connection.AsyncConnection
 import com.mongodb.connection.Connection
 import com.mongodb.connection.ConnectionDescription
 import com.mongodb.connection.QueryResult
-import com.mongodb.connection.ServerVersion
 import org.bson.BsonDocument
 import org.bson.BsonDouble
 import org.bson.BsonInt32
@@ -52,8 +51,8 @@ import static com.mongodb.ClusterFixture.enableMaxTimeFailPoint
 import static com.mongodb.ClusterFixture.executeAsync
 import static com.mongodb.ClusterFixture.getBinding
 import static com.mongodb.ClusterFixture.isSharded
-import static com.mongodb.ClusterFixture.serverVersionAtLeast
 import static java.util.concurrent.TimeUnit.MILLISECONDS
+
 
 class ListIndexesOperationSpecification extends OperationFunctionalSpecification {
 
@@ -180,6 +179,9 @@ class ListIndexesOperationSpecification extends OperationFunctionalSpecification
         collections.size() <= 2 // pre 3.0 items may be filtered out the batch by the driver
         cursor.hasNext()
         cursor.getBatchSize() == 2
+
+        cleanup:
+        cursor?.close()
     }
 
     @Category(Async)
@@ -208,9 +210,12 @@ class ListIndexesOperationSpecification extends OperationFunctionalSpecification
         then:
         callback.get().size() <= 2 // pre 3.0 items may be filtered out the batch by the driver
         cursor.getBatchSize() == 2
+
+        cleanup:
+        consumeAsyncResults(cursor)
     }
 
-    @IgnoreIf({ isSharded() || !serverVersionAtLeast([2, 6, 0]) })
+    @IgnoreIf({ isSharded() })
     def 'should throw execution timeout exception from execute'() {
         given:
         def operation = new ListIndexesOperation(getNamespace(), new DocumentCodec()).maxTime(1000, MILLISECONDS)
@@ -229,7 +234,7 @@ class ListIndexesOperationSpecification extends OperationFunctionalSpecification
     }
 
     @Category(Async)
-    @IgnoreIf({ isSharded() || !serverVersionAtLeast([2, 6, 0]) })
+    @IgnoreIf({ isSharded() })
     def 'should throw execution timeout exception from executeAsync'() {
         given:
         def operation = new ListIndexesOperation(getNamespace(), new DocumentCodec()).maxTime(1000, MILLISECONDS)
@@ -273,7 +278,7 @@ class ListIndexesOperationSpecification extends OperationFunctionalSpecification
 
         then:
         _ * connection.getDescription() >> helper.threeZeroConnectionDescription
-        1 * connection.command(_, _, readPreference.isSlaveOk(), _, _) >> helper.commandResult
+        1 * connection.command(_, _, _, readPreference, _, _) >> helper.commandResult
         1 * connection.release()
 
         where:
@@ -305,7 +310,7 @@ class ListIndexesOperationSpecification extends OperationFunctionalSpecification
 
         then:
         _ * connection.getDescription() >> helper.threeZeroConnectionDescription
-        1 * connection.commandAsync(helper.dbName, _, readPreference.isSlaveOk(), _, _, _) >> { it[6].onResult(helper.commandResult, _) }
+        1 * connection.commandAsync(helper.dbName, _, _, readPreference, _, _, _) >> { it[6].onResult(helper.commandResult, null) }
 
         where:
         readPreference << [ReadPreference.primary(), ReadPreference.secondary()]
@@ -316,10 +321,10 @@ class ListIndexesOperationSpecification extends OperationFunctionalSpecification
         namespace: new MongoNamespace('db', 'coll'),
         decoder: Stub(Decoder),
         twoSixConnectionDescription : Stub(ConnectionDescription) {
-            getServerVersion() >> new ServerVersion([2, 6, 0])
+            getMaxWireVersion() >> 2
         },
         threeZeroConnectionDescription : Stub(ConnectionDescription) {
-            getServerVersion() >> new ServerVersion([3, 0, 0])
+            getMaxWireVersion() >> 3
         },
         queryResult: Stub(QueryResult) {
             getNamespace() >> new MongoNamespace('db', 'coll')

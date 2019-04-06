@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,6 +15,8 @@
  */
 
 package com.mongodb.async.client;
+
+import com.mongodb.lang.Nullable;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -33,7 +35,7 @@ abstract class AbstractSubscription<TResult> implements Subscription {
 
     private final ConcurrentLinkedQueue<TResult> resultsQueue = new ConcurrentLinkedQueue<TResult>();
 
-    public AbstractSubscription(final Observer<? super TResult> observer) {
+    AbstractSubscription(final Observer<? super TResult> observer) {
         this.observer = observer;
     }
 
@@ -55,14 +57,14 @@ abstract class AbstractSubscription<TResult> implements Subscription {
     }
 
     @Override
-    public boolean isUnsubscribed() {
+    public synchronized boolean isUnsubscribed() {
         return isUnsubscribed;
     }
 
     @Override
     public void request(final long n) {
         if (n < 1) {
-            throw new IllegalArgumentException("Number requested cannot be negative: " + n);
+            throw new IllegalArgumentException("Number requested must be > 0: " + n);
         }
 
         boolean requestData = false;
@@ -95,26 +97,24 @@ abstract class AbstractSubscription<TResult> implements Subscription {
 
     abstract boolean checkCompleted();
 
-    boolean isTerminated() {
+    synchronized boolean isTerminated() {
         return isTerminated;
     }
 
-    long getRequested() {
+    synchronized long getRequested() {
         return requested;
     }
 
-    void addToQueue(final TResult result) {
+    void addToQueue(@Nullable final TResult result) {
         if (result != null) {
             resultsQueue.add(result);
         }
-        tryProcessResultsQueue();
     }
 
-    void addToQueue(final List<TResult> results) {
+    void addToQueue(@Nullable final List<TResult> results) {
         if (results != null) {
             resultsQueue.addAll(results);
         }
-        tryProcessResultsQueue();
     }
 
     void onError(final Throwable t) {
@@ -125,7 +125,7 @@ abstract class AbstractSubscription<TResult> implements Subscription {
     }
 
     void onNext(final TResult next) {
-        boolean isTerminated = false;
+        boolean isTerminated;
         synchronized (this) {
             isTerminated = this.isTerminated;
         }
@@ -154,7 +154,7 @@ abstract class AbstractSubscription<TResult> implements Subscription {
         }
     }
 
-    private void tryProcessResultsQueue() {
+    void tryProcessResultsQueue() {
         try {
             processResultsQueue();
         } catch (Throwable t) {
@@ -178,7 +178,7 @@ abstract class AbstractSubscription<TResult> implements Subscription {
             long processedCount = 0;
             boolean completed = false;
             while (true) {
-                long localWanted = 0;
+                long localWanted;
 
                 synchronized (this) {
                     requested -= processedCount;

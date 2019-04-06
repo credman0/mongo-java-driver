@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import com.mongodb.connection.ConnectionDescription;
 import com.mongodb.connection.QueryResult;
 import com.mongodb.operation.CommandOperationHelper.CommandTransformer;
 import org.bson.BsonArray;
+import org.bson.BsonBoolean;
 import org.bson.BsonDocument;
 import org.bson.BsonDocumentReader;
 import org.bson.BsonInt32;
@@ -52,6 +53,7 @@ import static com.mongodb.ReadPreference.primary;
 import static com.mongodb.assertions.Assertions.notNull;
 import static com.mongodb.connection.ServerType.SHARD_ROUTER;
 import static com.mongodb.internal.async.ErrorHandlingResultCallback.errorHandlingCallback;
+import static com.mongodb.internal.operation.ServerVersionHelper.serverIsAtLeastVersionThreeDotZero;
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocol;
 import static com.mongodb.operation.CommandOperationHelper.executeWrappedCommandProtocolAsync;
 import static com.mongodb.operation.CommandOperationHelper.isNamespaceError;
@@ -65,7 +67,6 @@ import static com.mongodb.operation.OperationHelper.createEmptyBatchCursor;
 import static com.mongodb.operation.OperationHelper.cursorDocumentToAsyncBatchCursor;
 import static com.mongodb.operation.OperationHelper.cursorDocumentToBatchCursor;
 import static com.mongodb.operation.OperationHelper.releasingCallback;
-import static com.mongodb.operation.OperationHelper.serverIsAtLeastVersionThreeDotZero;
 import static com.mongodb.operation.OperationHelper.withConnection;
 import static java.lang.String.format;
 import static java.util.Arrays.asList;
@@ -78,12 +79,14 @@ import static java.util.Arrays.asList;
  * @param <T> the document type
  * @since 3.0
  */
+@Deprecated
 public class ListCollectionsOperation<T> implements AsyncReadOperation<AsyncBatchCursor<T>>, ReadOperation<BatchCursor<T>> {
     private final String databaseName;
     private final Decoder<T> decoder;
     private BsonDocument filter;
     private int batchSize;
     private long maxTimeMS;
+    private boolean nameOnly;
 
     /**
      * Construct a new instance.
@@ -107,6 +110,17 @@ public class ListCollectionsOperation<T> implements AsyncReadOperation<AsyncBatc
     }
 
     /**
+     * Gets whether only the collection names should be returned.
+     *
+     * @return true if only the collection names should be returned
+     * @since 3.8
+     * @mongodb.server.release 4.0
+     */
+    public boolean isNameOnly() {
+        return nameOnly;
+    }
+
+    /**
      * Sets the query filter to apply to the query.
      *
      * @param filter the filter, which may be null.
@@ -115,6 +129,23 @@ public class ListCollectionsOperation<T> implements AsyncReadOperation<AsyncBatc
      */
     public ListCollectionsOperation<T> filter(final BsonDocument filter) {
         this.filter = filter;
+        return this;
+    }
+
+    /**
+     * Sets the query filter to apply to the query.
+     * <p>
+     *     Note: this is advisory only, and should be considered an optimization.  Server versions prior to MongoDB 4.0 will ignore
+     *     this request.
+     * </p>
+     *
+     * @param nameOnly true if only the collection names should be requested from the server
+     * @return this
+     * @since 3.8
+     * @mongodb.server.release 4.0
+     */
+    public ListCollectionsOperation<T> nameOnly(final boolean nameOnly) {
+        this.nameOnly = nameOnly;
         return this;
     }
 
@@ -167,6 +198,8 @@ public class ListCollectionsOperation<T> implements AsyncReadOperation<AsyncBatc
         this.maxTimeMS = TimeUnit.MILLISECONDS.convert(maxTime, timeUnit);
         return this;
     }
+
+
 
     @Override
     public BatchCursor<T> execute(final ReadBinding binding) {
@@ -238,7 +271,7 @@ public class ListCollectionsOperation<T> implements AsyncReadOperation<AsyncBatc
     }
 
     private AsyncBatchCursor<T> emptyAsyncCursor(final AsyncConnectionSource source) {
-        return createEmptyAsyncBatchCursor(createNamespace(), decoder, source.getServerDescription().getAddress(), batchSize);
+        return createEmptyAsyncBatchCursor(createNamespace(), source.getServerDescription().getAddress());
     }
 
     private MongoNamespace createNamespace() {
@@ -270,9 +303,12 @@ public class ListCollectionsOperation<T> implements AsyncReadOperation<AsyncBatc
 
     private BsonDocument getCommand() {
         BsonDocument command = new BsonDocument("listCollections", new BsonInt32(1))
-                .append("cursor", getCursorDocumentFromBatchSize(batchSize));
+                .append("cursor", getCursorDocumentFromBatchSize(batchSize == 0 ? null : batchSize));
         if (filter != null) {
             command.append("filter", filter);
+        }
+        if (nameOnly) {
+            command.append("nameOnly", BsonBoolean.TRUE);
         }
         if (maxTimeMS > 0) {
             command.put("maxTimeMS", new BsonInt64(maxTimeMS));
@@ -382,6 +418,20 @@ public class ListCollectionsOperation<T> implements AsyncReadOperation<AsyncBatc
         @Override
         public void next(final SingleResultCallback<List<T>> callback) {
             delegate.next(new SingleResultCallback<List<BsonDocument>>() {
+                @Override
+                public void onResult(final List<BsonDocument> result, final Throwable t) {
+                    if (t != null) {
+                        callback.onResult(null, t);
+                    } else {
+                        callback.onResult(projectFromFullNamespaceToCollectionName(result), null);
+                    }
+                }
+            });
+        }
+
+        @Override
+        public void tryNext(final SingleResultCallback<List<T>> callback) {
+            delegate.tryNext(new SingleResultCallback<List<BsonDocument>>() {
                 @Override
                 public void onResult(final List<BsonDocument> result, final Throwable t) {
                     if (t != null) {

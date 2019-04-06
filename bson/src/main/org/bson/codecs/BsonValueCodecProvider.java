@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,10 +91,6 @@ public class BsonValueCodecProvider implements CodecProvider {
             return (Codec<T>) codecs.get(clazz);
         }
 
-        if (clazz == BsonArray.class) {
-            return (Codec<T>) new BsonArrayCodec(registry);
-        }
-
         if (clazz == BsonJavaScriptWithScope.class) {
             return (Codec<T>) new BsonJavaScriptWithScopeCodec(registry.get(BsonDocument.class));
         }
@@ -113,6 +109,10 @@ public class BsonValueCodecProvider implements CodecProvider {
 
         if (BsonDocument.class.isAssignableFrom(clazz)) {
             return (Codec<T>) new BsonDocumentCodec(registry);
+        }
+
+        if (BsonArray.class.isAssignableFrom(clazz)) {
+            return (Codec<T>) new BsonArrayCodec(registry);
         }
 
         return null;

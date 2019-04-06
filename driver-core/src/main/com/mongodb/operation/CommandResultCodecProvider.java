@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,22 +46,17 @@ import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 class CommandResultCodecProvider<P> implements CodecProvider {
     private final Map<Class<?>, Codec<?>> codecs = new HashMap<Class<?>, Codec<?>>();
     private final Decoder<P> payloadDecoder;
-    private final String fieldContainingPayload;
+    private final List<String> fieldsContainingPayload;
 
-    /**
-     * Construct a new instance. with the default codec for each BSON type.
-     *
-     * @param payloadDecoder the specific decoder to use on the field.
-     * @param fieldContainingPayload the field name to be decoded with the payloadDecoder.
-     */
-    public CommandResultCodecProvider(final Decoder<P> payloadDecoder, final String fieldContainingPayload) {
+    CommandResultCodecProvider(final Decoder<P> payloadDecoder, final List<String> fieldContainingPayload) {
         this.payloadDecoder = payloadDecoder;
-        this.fieldContainingPayload = fieldContainingPayload;
+        this.fieldsContainingPayload = fieldContainingPayload;
         addCodecs();
     }
 
@@ -77,7 +72,7 @@ class CommandResultCodecProvider<P> implements CodecProvider {
         }
 
         if (clazz == BsonDocument.class) {
-            return (Codec<T>) new CommandResultDocumentCodec<P>(registry, payloadDecoder, fieldContainingPayload);
+            return (Codec<T>) new CommandResultDocumentCodec<P>(registry, payloadDecoder, fieldsContainingPayload);
         }
 
         return null;
@@ -120,7 +115,7 @@ class CommandResultCodecProvider<P> implements CodecProvider {
 
         CommandResultCodecProvider<?> that = (CommandResultCodecProvider) o;
 
-        if (!fieldContainingPayload.equals(that.fieldContainingPayload)) {
+        if (!fieldsContainingPayload.equals(that.fieldsContainingPayload)) {
             return false;
         }
         if (!payloadDecoder.getClass().equals(that.payloadDecoder.getClass())) {
@@ -133,7 +128,7 @@ class CommandResultCodecProvider<P> implements CodecProvider {
     @Override
     public int hashCode() {
         int result = payloadDecoder.getClass().hashCode();
-        result = 31 * result + fieldContainingPayload.hashCode();
+        result = 31 * result + fieldsContainingPayload.hashCode();
         return result;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package org.bson.codecs;
@@ -44,7 +43,6 @@ public class IterableCodecProvider implements CodecProvider {
      * IterableCodec as a last step when decoding values.
      *
      * @param valueTransformer the value transformer for decoded values
-     * @see org.bson.codecs.DocumentCodec#DocumentCodec(org.bson.codecs.configuration.CodecRegistry, BsonTypeClassMap, org.bson.Transformer)
      */
     public IterableCodecProvider(final Transformer valueTransformer) {
         this(new BsonTypeClassMap(), valueTransformer);

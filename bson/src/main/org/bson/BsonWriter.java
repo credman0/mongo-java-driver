@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,7 +151,7 @@ public interface BsonWriter {
      * @param value The Decimal128 value.
      * @since 3.4
      */
-    void writeDecimal128(final Decimal128 value);
+    void writeDecimal128(Decimal128 value);
 
     /**
      * Writes a BSON Decimal128 element to the writer.
@@ -356,4 +356,5 @@ public interface BsonWriter {
      * @param reader The source.
      */
     void pipe(BsonReader reader);
+
 }

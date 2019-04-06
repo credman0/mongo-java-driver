@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,6 +17,7 @@
 package com.mongodb.client.gridfs.model;
 
 import com.mongodb.MongoGridFSException;
+import com.mongodb.lang.Nullable;
 import org.bson.BsonValue;
 import org.bson.Document;
 import org.bson.types.ObjectId;
@@ -55,9 +56,11 @@ public final class GridFSFile {
      * @param uploadDate the upload date of the file
      * @param md5 the hash of the files contents
      * @param metadata the optional metadata for the file
+     * @deprecated there is no replacement for this constructor
      */
+    @Deprecated
     public GridFSFile(final BsonValue id, final String filename, final long length, final int chunkSize, final Date uploadDate,
-                      final String md5, final Document metadata) {
+                      @Nullable final String md5, final Document metadata) {
         this(id, filename, length, chunkSize, uploadDate, md5, metadata, null);
     }
 
@@ -74,15 +77,17 @@ public final class GridFSFile {
      * @param md5 the hash of the files contents
      * @param metadata the optional metadata for the file
      * @param extraElements any extra data stored in the document
+     * @deprecated there is no replacement for this constructor
      */
+    @Deprecated
     public GridFSFile(final BsonValue id, final String filename, final long length, final int chunkSize, final Date uploadDate,
-                      final String md5, final Document metadata, final Document extraElements) {
+                      @Nullable final String md5, @Nullable final Document metadata, @Nullable final Document extraElements) {
         this.id = notNull("id", id);
         this.filename = notNull("filename", filename);
         this.length = notNull("length", length);
         this.chunkSize = notNull("chunkSize", chunkSize);
         this.uploadDate = notNull("uploadDate", uploadDate);
-        this.md5 = notNull("md5", md5);
+        this.md5 = md5;
         this.metadata = metadata != null && metadata.isEmpty() ? null : metadata;
         this.extraElements = extraElements;
     }
@@ -149,8 +154,11 @@ public final class GridFSFile {
     /**
      * The hash of the contents of the stored file
      *
-     * @return the hash of the contents of the stored file
+     * @return the hash of the contents of the stored file or null if hashing the contents was disabled.
+     * @deprecated file hashing is deprecated and may be removed in the future.
      */
+    @Deprecated
+    @Nullable
     public String getMD5() {
         return md5;
     }
@@ -160,6 +168,7 @@ public final class GridFSFile {
      *
      * @return the metadata document or null
      */
+    @Nullable
     public Document getMetadata() {
         return metadata;
     }
@@ -168,9 +177,10 @@ public final class GridFSFile {
      * All deprecated top level elements including any contentType or aliases data
      *
      * @return the extra elements document or null
-     * @deprecated any extra information should be stored in the metadata document.
+     * @deprecated any extra information should be stored in the metadata document instead.
      */
     @Deprecated
+    @Nullable
     public Document getExtraElements() {
         return extraElements;
     }
@@ -179,7 +189,7 @@ public final class GridFSFile {
      * The content type of the file
      *
      * @return the content type of the file
-     * @deprecated content type information stored in the metadata document.
+     * @deprecated content type information should be stored the metadata document instead.
      */
     @Deprecated
     public String getContentType() {
@@ -194,7 +204,7 @@ public final class GridFSFile {
      * The aliases for the file
      *
      * @return the aliases of the file
-     * @deprecated aliases should be stored in the metadata document.
+     * @deprecated any aliases should be stored in the metadata document instead.
      */
     @Deprecated
     @SuppressWarnings("unchecked")
@@ -232,7 +242,7 @@ public final class GridFSFile {
         if (!uploadDate.equals(that.uploadDate)) {
             return false;
         }
-        if (!md5.equals(that.md5)) {
+        if (md5 != null ? !md5.equals(that.md5) : that.md5 != null) {
             return false;
         }
         if (metadata != null ? !metadata.equals(that.metadata) : that.metadata != null) {
@@ -251,7 +261,7 @@ public final class GridFSFile {
         result = 31 * result + (int) (length ^ (length >>> 32));
         result = 31 * result + chunkSize;
         result = 31 * result + uploadDate.hashCode();
-        result = 31 * result + md5.hashCode();
+        result = 31 * result + (md5 != null ? md5.hashCode() : 0);
         result = 31 * result + (metadata != null ? metadata.hashCode() : 0);
         result = 31 * result + (extraElements != null ? extraElements.hashCode() : 0);
         return result;

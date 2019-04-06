@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import com.mongodb.ReadPreference;
 import com.mongodb.async.SingleResultCallback;
 import com.mongodb.connection.AsyncConnection;
 import com.mongodb.connection.ServerDescription;
+import com.mongodb.internal.connection.NoOpSessionContext;
+import com.mongodb.session.SessionContext;
 
 import static com.mongodb.assertions.Assertions.notNull;
 
@@ -28,6 +30,7 @@ import static com.mongodb.assertions.Assertions.notNull;
  *
  * @since 3.2
  */
+@Deprecated
 public class AsyncSingleConnectionReadBinding extends AbstractReferenceCounted implements AsyncReadBinding {
     private final ReadPreference readPreference;
     private final ServerDescription serverDescription;
@@ -53,6 +56,11 @@ public class AsyncSingleConnectionReadBinding extends AbstractReferenceCounted i
     }
 
     @Override
+    public SessionContext getSessionContext() {
+        return NoOpSessionContext.INSTANCE;
+    }
+
+    @Override
     public void getReadConnectionSource(final SingleResultCallback<AsyncConnectionSource> callback) {
           callback.onResult(new AsyncSingleConnectionSource(), null);
     }
@@ -72,13 +80,18 @@ public class AsyncSingleConnectionReadBinding extends AbstractReferenceCounted i
     }
 
     private class AsyncSingleConnectionSource extends AbstractReferenceCounted implements AsyncConnectionSource {
-        public AsyncSingleConnectionSource() {
+        AsyncSingleConnectionSource() {
             AsyncSingleConnectionReadBinding.this.retain();
         }
 
         @Override
         public ServerDescription getServerDescription() {
             return serverDescription;
+        }
+
+        @Override
+        public SessionContext getSessionContext() {
+            return NoOpSessionContext.INSTANCE;
         }
 
         @Override

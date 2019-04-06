@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,6 +20,9 @@ import com.mongodb.Block
 import com.mongodb.MongoException
 import com.mongodb.async.SingleResultCallback
 import spock.lang.Specification
+
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 import static com.mongodb.async.client.Observables.observe
 
@@ -45,7 +48,8 @@ class SingleResultCallbackSubscriptionSpecification extends Specification {
 
     def 'should call onComplete after all data has been consumed'() {
         given:
-        SingleResultCallback<Integer> singleResultCallback
+        SingleResultCallback<Integer> singleResultCallback = null
+        def executor = Executors.newFixedThreadPool(5)
         def observer = new TestObserver()
         observe(new Block<SingleResultCallback<Integer>>() {
             @Override
@@ -56,20 +60,24 @@ class SingleResultCallbackSubscriptionSpecification extends Specification {
 
         when:
         observer.requestMore(5)
-        observer.requestMore(5)
 
         then:
+        observer.assertNoTerminalEvent()
         observer.assertNoErrors()
         observer.assertReceivedOnNext([])
-        observer.assertNoTerminalEvent()
 
         when:
-        singleResultCallback.onResult(1, null)
+        100.times { executor.submit { observer.requestMore(1) } }
+        singleResultCallback?.onResult(1, null)
 
         then:
         observer.assertNoErrors()
-        observer.assertReceivedOnNext([1])
         observer.assertTerminalEvent()
+        observer.assertReceivedOnNext([1])
+
+        cleanup:
+        executor?.shutdown()
+        executor?.awaitTermination(10, TimeUnit.SECONDS)
     }
 
     def 'should throw an error if request is less than 1'() {
@@ -91,7 +99,7 @@ class SingleResultCallbackSubscriptionSpecification extends Specification {
         observe(new Block<SingleResultCallback<Integer>>() {
             @Override
             void apply(final SingleResultCallback<Integer> callback) {
-                callback.onResult(null, new MongoException('failed'));
+                callback.onResult(null, new MongoException('failed'))
             }
         }).subscribe(observer)
 
@@ -267,7 +275,7 @@ class SingleResultCallbackSubscriptionSpecification extends Specification {
         observe(new Block<SingleResultCallback<Integer>>() {
             @Override
             void apply(final SingleResultCallback<Integer> callback) {
-                throw new MongoException('failed');
+                throw new MongoException('failed')
             }
         }).subscribe(observer)
 
@@ -288,7 +296,7 @@ class SingleResultCallbackSubscriptionSpecification extends Specification {
 
             @Override
             void apply(final SingleResultCallback<Integer> callback) {
-                callback.onResult(results, null);
+                callback.onResult(results, null)
             }
         }
     }

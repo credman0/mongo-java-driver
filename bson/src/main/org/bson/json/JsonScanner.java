@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,14 @@ class JsonScanner {
 
     private final JsonBuffer buffer;
 
+    JsonScanner(final JsonBuffer buffer) {
+        this.buffer = buffer;
+    }
+
+    JsonScanner(final String json) {
+        this(new JsonBuffer(json));
+    }
+
     /**
      * @param newPosition the new position of the cursor position in the buffer
      */
@@ -39,24 +47,6 @@ class JsonScanner {
      */
     public int getBufferPosition() {
         return buffer.getPosition();
-    }
-
-    /**
-     * Constructs a a new {@code JSONScanner} that produces values scanned from specified {@code JSONBuffer}.
-     *
-     * @param buffer A buffer to be scanned.
-     */
-    public JsonScanner(final JsonBuffer buffer) {
-        this.buffer = buffer;
-    }
-
-    /**
-     * Constructs a a new {@code JSONScanner} that produces values scanned from the specified {@code String}.
-     *
-     * @param json A string representation of a JSON to be scanned.
-     */
-    public JsonScanner(final String json) {
-        this(new JsonBuffer(json));
     }
 
     /**

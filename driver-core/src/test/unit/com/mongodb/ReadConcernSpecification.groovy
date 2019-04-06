@@ -1,11 +1,11 @@
 /*
- * Copyright 2015-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,14 +23,17 @@ class ReadConcernSpecification extends Specification {
 
     def 'should have the expected read concern levels'() {
         expect:
-        staticValue == expected
+        staticValue == expectedReadConcern
+        staticValue.getLevel() == expectedLevel
 
         where:
-        staticValue              | expected
-        ReadConcern.DEFAULT      | new ReadConcern()
-        ReadConcern.LOCAL        | new ReadConcern(ReadConcernLevel.LOCAL)
-        ReadConcern.MAJORITY     | new ReadConcern(ReadConcernLevel.MAJORITY)
-        ReadConcern.LINEARIZABLE | new ReadConcern(ReadConcernLevel.LINEARIZABLE)
+        staticValue              | expectedLevel                 | expectedReadConcern
+        ReadConcern.DEFAULT      | null                          | new ReadConcern()
+        ReadConcern.LOCAL        | ReadConcernLevel.LOCAL        | new ReadConcern(ReadConcernLevel.LOCAL)
+        ReadConcern.MAJORITY     | ReadConcernLevel.MAJORITY     | new ReadConcern(ReadConcernLevel.MAJORITY)
+        ReadConcern.LINEARIZABLE | ReadConcernLevel.LINEARIZABLE | new ReadConcern(ReadConcernLevel.LINEARIZABLE)
+        ReadConcern.SNAPSHOT     | ReadConcernLevel.SNAPSHOT     | new ReadConcern(ReadConcernLevel.SNAPSHOT)
+        ReadConcern.AVAILABLE    | ReadConcernLevel.AVAILABLE    | new ReadConcern(ReadConcernLevel.AVAILABLE)
     }
 
     def 'should create the expected Documents'() {
@@ -43,6 +46,8 @@ class ReadConcernSpecification extends Specification {
         ReadConcern.LOCAL        | BsonDocument.parse('{level: "local"}')
         ReadConcern.MAJORITY     | BsonDocument.parse('{level: "majority"}')
         ReadConcern.LINEARIZABLE | BsonDocument.parse('{level: "linearizable"}')
+        ReadConcern.SNAPSHOT     | BsonDocument.parse('{level: "snapshot"}')
+        ReadConcern.AVAILABLE    | BsonDocument.parse('{level: "available"}')
     }
 
     def 'should have the correct value for isServerDefault'() {
@@ -55,5 +60,7 @@ class ReadConcernSpecification extends Specification {
         ReadConcern.LOCAL        | false
         ReadConcern.MAJORITY     | false
         ReadConcern.LINEARIZABLE | false
+        ReadConcern.SNAPSHOT     | false
+        ReadConcern.AVAILABLE    | false
     }
 }

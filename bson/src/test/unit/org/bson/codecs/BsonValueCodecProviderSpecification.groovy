@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import org.bson.BsonString
 import org.bson.BsonSymbol
 import org.bson.BsonTimestamp
 import org.bson.BsonUndefined
+import org.bson.RawBsonArray
 import org.bson.RawBsonDocument
 import spock.lang.Specification
 
@@ -73,6 +74,7 @@ class BsonValueCodecProviderSpecification extends Specification {
         provider.get(BsonJavaScriptWithScope, codecRegistry).class == BsonJavaScriptWithScopeCodec
 
         provider.get(BsonArray, codecRegistry).class == BsonArrayCodec
+        provider.get(RawBsonArray, codecRegistry).class == BsonArrayCodec
 
         provider.get(BsonDocument, codecRegistry).class == BsonDocumentCodec
         provider.get(BsonDocumentWrapper, codecRegistry).class == BsonDocumentWrapperCodec

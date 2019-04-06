@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,9 +23,10 @@ import com.mongodb.async.client.gridfs.AsyncOutputStream;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
-import static org.bson.assertions.Assertions.notNull;
+import static com.mongodb.assertions.Assertions.notNull;
 
 /**
  * A general helper class that creates {@link AsyncInputStream} or {@link AsyncOutputStream} instances.
@@ -39,7 +40,9 @@ import static org.bson.assertions.Assertions.notNull;
  * </ul>
  *
  * @since 3.3
+ * @deprecated Prefer the Reactive Streams-based asynchronous driver (mongodb-driver-reactivestreams artifactId)
  */
+@Deprecated
 public final class AsyncStreamHelper {
 
     /**
@@ -74,6 +77,12 @@ public final class AsyncStreamHelper {
             @Override
             public void read(final ByteBuffer dstByteBuffer, final SingleResultCallback<Integer> callback) {
                 transferDataFromByteBuffers(srcByteBuffer, dstByteBuffer, callback);
+            }
+
+            @Override
+            public void skip(final long bytesToSkip, final SingleResultCallback<Long> callback) {
+                notNull("callback", callback);
+                callback.onResult(0L, null);
             }
 
             @Override
@@ -145,6 +154,17 @@ public final class AsyncStreamHelper {
             }
 
             @Override
+            public void skip(final long bytesToSkip, final SingleResultCallback<Long> callback) {
+                notNull("callback", callback);
+                try {
+                    long skipped = inputStream.skip(bytesToSkip);
+                    callback.onResult(skipped, null);
+                } catch (Throwable t) {
+                    callback.onResult(null, t);
+                }
+            }
+
+            @Override
             public void close(final SingleResultCallback<Void> callback) {
                 try {
                     inputStream.close();
@@ -201,7 +221,7 @@ public final class AsyncStreamHelper {
     }
 
     private static void transferDataFromByteBuffers(final ByteBuffer srcByteBuffer, final ByteBuffer dstByteBuffer,
-                                             final SingleResultCallback<Integer> callback) {
+                                                    final SingleResultCallback<Integer> callback) {
         if (!srcByteBuffer.hasRemaining()) {
             callback.onResult(-1, null);
             return;
@@ -209,9 +229,9 @@ public final class AsyncStreamHelper {
         int transferAmount = Math.min(dstByteBuffer.remaining(), srcByteBuffer.remaining());
         if (transferAmount > 0) {
             ByteBuffer temp = srcByteBuffer.duplicate();
-            temp.limit(temp.position() + transferAmount);
+            ((Buffer) temp).limit(temp.position() + transferAmount);
             dstByteBuffer.put(temp);
-            srcByteBuffer.position(srcByteBuffer.position() + transferAmount);
+            ((Buffer) srcByteBuffer).position(srcByteBuffer.position() + transferAmount);
         }
         callback.onResult(transferAmount, null);
     }

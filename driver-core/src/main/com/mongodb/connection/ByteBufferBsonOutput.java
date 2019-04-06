@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import org.bson.io.OutputBuffer;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,6 +31,7 @@ import static com.mongodb.assertions.Assertions.notNull;
  * This class should not be considered as part of the public API, and it may change or be removed at any time.
  *
  */
+@Deprecated
 public class ByteBufferBsonOutput extends OutputBuffer {
 
     private static final int MAX_SHIFT = 31;
@@ -128,7 +130,7 @@ public class ByteBufferBsonOutput extends OutputBuffer {
 
         List<ByteBuf> buffers = new ArrayList<ByteBuf>(bufferList.size());
         for (final ByteBuf cur : bufferList) {
-            buffers.add(cur.duplicate().flip());
+            buffers.add(cur.duplicate().order(ByteOrder.LITTLE_ENDIAN).flip());
         }
         return buffers;
     }

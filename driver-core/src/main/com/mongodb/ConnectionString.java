@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,11 @@
 
 package com.mongodb;
 
+import com.mongodb.connection.StreamFactoryFactory;
 import com.mongodb.diagnostics.logging.Logger;
 import com.mongodb.diagnostics.logging.Loggers;
+import com.mongodb.internal.dns.DefaultDnsResolver;
+import com.mongodb.lang.Nullable;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -25,19 +28,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static com.mongodb.AuthenticationMechanism.GSSAPI;
-import static com.mongodb.AuthenticationMechanism.MONGODB_CR;
-import static com.mongodb.AuthenticationMechanism.MONGODB_X509;
-import static com.mongodb.AuthenticationMechanism.PLAIN;
-import static com.mongodb.AuthenticationMechanism.SCRAM_SHA_1;
 import static java.lang.String.format;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.unmodifiableList;
 
 
 /**
@@ -46,14 +46,17 @@ import static java.util.Collections.singletonList;
  *
  * <p>The format of the Connection String is:</p>
  * <pre>
- *   mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
+ *   mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database.collection][?options]]
  * </pre>
  * <ul>
  * <li>{@code mongodb://} is a required prefix to identify that this is a string in the standard connection format.</li>
  * <li>{@code username:password@} are optional.  If given, the driver will attempt to login to a database after
  * connecting to a database server.  For some authentication mechanisms, only the username is specified and the password is not,
  * in which case the ":" after the username is left off as well</li>
- * <li>{@code host1} is the only required part of the connection string.  It identifies a server address to connect to.</li>
+ * <li>{@code host1} is the only required part of the connection string. It identifies a server address to connect to.
+ * Support for Unix domain sockets was added in 3.7. Note: The path must be urlencoded eg: {@code mongodb://%2Ftmp%2Fmongodb-27017.sock}
+ * and the {@code jnr.unixsocket} library installed.
+ * </li>
  * <li>{@code :portX} is optional and defaults to :27017 if not provided.</li>
  * <li>{@code /database} is the name of the database to login to and thus is only relevant if the
  * {@code username:password@} syntax is used. If not specified the "admin" database will be used by default.</li>
@@ -62,7 +65,27 @@ import static java.util.Collections.singletonList;
  * are separated by "&amp;". For backwards compatibility, ";" is accepted as a separator in addition to "&amp;",
  * but should be considered as deprecated.</li>
  * </ul>
- *
+ * <p>An alternative format, using the mongodb+srv protocol, is:
+ * <pre>
+ *   mongodb+srv://[username:password@]host[/[database][?options]]
+ * </pre>
+ * <ul>
+ * <li>{@code mongodb+srv://} is a required prefix for this format.</li>
+ * <li>{@code username:password@} are optional.  If given, the driver will attempt to login to a database after
+ * connecting to a database server.  For some authentication mechanisms, only the username is specified and the password is not,
+ * in which case the ":" after the username is left off as well</li>
+ * <li>{@code host} is the only required part of the URI.  It identifies a single host name for which SRV records are looked up
+ * from a Domain Name Server after prefixing the host name with {@code "_mongodb._tcp"}.  The host/port for each SRV record becomes the
+ * seed list used to connect, as if each one were provided as host/port pair in a URI using the normal mongodb protocol.</li>
+ * <li>{@code /database} is the name of the database to login to and thus is only relevant if the
+ * {@code username:password@} syntax is used. If not specified the "admin" database will be used by default.</li>
+ * <li>{@code ?options} are connection options. Note that if {@code database} is absent there is still a {@code /}
+ * required between the last host and the {@code ?} introducing the options. Options are name=value pairs and the pairs
+ * are separated by "&amp;". For backwards compatibility, ";" is accepted as a separator in addition to "&amp;",
+ * but should be considered as deprecated. Additionally with the mongodb+srv protocol, TXT records are looked up from a Domain Name
+ * Server for the given host, and the text value of each one is prepended to any options on the URI itself.  Because the last specified
+ * value for any option wins, that means that options provided on the URI will override any that are provided via TXT records.</li>
+ * </ul>
  * <p>The following options are supported (case insensitive):</p>
  *
  * <p>Server Selection Configuration:</p>
@@ -83,15 +106,22 @@ import static java.util.Collections.singletonList;
  * all members of the set.</li>
  * </ul>
  * <p>Connection Configuration:</p>
- * <p>Connection Configuration:</p>
  * <ul>
- * <li>{@code streamType=nio2|netty}: The stream type to use for connections. If unspecified, nio2 will be used.</li>
- * <li>{@code ssl=true|false}: Whether to connect using SSL.</li>
- * <li>{@code sslInvalidHostNameAllowed=true|false}: Whether to allow invalid host names for SSL connections.</li>
+ * <li>{@code ssl=true|false}: Whether to connect using TLS.</li>
+ * <li>{@code tls=true|false}: Whether to connect using TLS. Supersedes the ssl option</li>
+ * <li>{@code tlsInsecure=true|false}: If connecting with TLS, this option enables insecure TLS connections. Currently this has the
+ * same effect of setting tlsAllowInvalidHostnames to true. Other mechanism for relaxing TLS security constraints must be handled in
+ * the application by customizing the {@link javax.net.ssl.SSLContext}</li>
+ * <li>{@code sslInvalidHostNameAllowed=true|false}: Whether to allow invalid host names for TLS connections.</li>
+ * <li>{@code tlsAllowInvalidHostnames=true|false}: Whether to allow invalid host names for TLS connections. Supersedes the
+ * sslInvalidHostNameAllowed option</li>
  * <li>{@code connectTimeoutMS=ms}: How long a connection can take to be opened before timing out.</li>
  * <li>{@code socketTimeoutMS=ms}: How long a send or receive on a socket can take before timing out.</li>
  * <li>{@code maxIdleTimeMS=ms}: Maximum idle time of a pooled connection. A connection that exceeds this limit will be closed</li>
  * <li>{@code maxLifeTimeMS=ms}: Maximum life time of a pooled connection. A connection that exceeds this limit will be closed</li>
+ * <li>{@code streamType=nio2|netty}: The stream type to use for connections. If unspecified, nio2 will be used for asynchronous
+ * clients.  Note that this query parameter has been deprecated and applications should use
+ * {@link MongoClientSettings.Builder#streamFactoryFactory(StreamFactoryFactory)} instead.</li>
  * </ul>
  * <p>Connection pool configuration:</p>
  * <ul>
@@ -106,9 +136,9 @@ import static java.util.Collections.singletonList;
  * <ul>
  * <li>{@code safe=true|false}
  * <ul>
- * <li>{@code true}: the driver sends a getLastError command after every update to ensure that the update succeeded
+ * <li>{@code true}: the driver ensures that all writes are acknowledged by the MongoDB server, or else throws an exception.
  * (see also {@code w} and {@code wtimeoutMS}).</li>
- * <li>{@code false}: the driver does not send a getLastError command after every update.</li>
+ * <li>{@code false}: the driver does not ensure that all writes are acknowledged by the MongoDB server.</li>
  * </ul>
  * </li>
  * <li>{@code journal=true|false}
@@ -119,14 +149,14 @@ import static java.util.Collections.singletonList;
  * </li>
  * <li>{@code w=wValue}
  * <ul>
- * <li>The driver adds { w : wValue } to the getLastError command. Implies {@code safe=true}.</li>
+ * <li>The driver adds { w : wValue } to all write commands. Implies {@code safe=true}.</li>
  * <li>wValue is typically a number, but can be any string in order to allow for specifications like
  * {@code "majority"}</li>
  * </ul>
  * </li>
  * <li>{@code wtimeoutMS=ms}
  * <ul>
- * <li>The driver adds { wtimeout : ms } to the getlasterror command. Implies {@code safe=true}.</li>
+ * <li>The driver adds { wtimeout : ms } to all write commands. Implies {@code safe=true}.</li>
  * <li>Used in combination with {@code w}</li>
  * </ul>
  * </li>
@@ -155,9 +185,12 @@ import static java.util.Collections.singletonList;
  * <li>Order matters when using multiple readPreferenceTags.</li>
  * </ul>
  * </li>
- * <li>{@code maxStalenessMS=ms}. The maximum staleness in milliseconds. For use with any non-primary read preference, the driver estimates
- * the staleness of each secondary, based on lastWriteDate values provided in server isMaster responses, and selects only those secondaries
- * whose staleness is less than or equal to maxStalenessMS.  The default is 0, meaning there is no staleness check.
+ * <li>{@code maxStalenessSeconds=seconds}. The maximum staleness in seconds. For use with any non-primary read preference, the driver
+ * estimates the staleness of each secondary, based on lastWriteDate values provided in server isMaster responses, and selects only those
+ * secondaries whose staleness is less than or equal to maxStalenessSeconds.  Not providing the parameter or explicitly setting it to -1
+ * indicates that there should be no max staleness check. The maximum staleness feature is designed to prevent badly-lagging servers from
+ * being selected. The staleness estimate is imprecise and shouldn't be used to try to select "up-to-date" secondaries.  The minimum value
+ * is either 90 seconds, or the heartbeat frequency plus 10 seconds, whichever is greatest.
  * </li>
  * </ul>
  * <p>Authentication configuration:</p>
@@ -178,18 +211,38 @@ import static java.util.Collections.singletonList;
  *   Deprecated, please use {@code authMechanismProperties=SERVICE_NAME:string} instead.
  * </li>
  * </ul>
+ * <p>Server Handshake configuration:</p>
+ * <ul>
+ * <li>{@code appName=string}: Sets the logical name of the application.  The application name may be used by the client to identify
+ * the application to the server, for use in server logs, slow query logs, and profile collection.</li>
+ * </ul>
+ * <p>Compressor configuration:</p>
+ * <ul>
+ * <li>{@code compressors=string}: A comma-separated list of compressors to request from the server.  The supported compressors
+ * currently are 'zlib', 'snappy' and 'zstd'.</li>
+ * <li>{@code zlibCompressionLevel=integer}: Integer value from -1 to 9 representing the zlib compression level. Lower values will make
+ * compression faster, while higher values will make compression better.</li>
+ * </ul>
+ * <p>General configuration:</p>
+ * <ul>
+ * <li>{@code retryWrites=true|false}. If true the driver will retry supported write operations if they fail due to a network error.
+ *  Defaults to true.</li>
+ * </ul>
  *
  * @mongodb.driver.manual reference/connection-string Connection String Format
  * @since 3.0.0
  */
 public class ConnectionString {
 
-    private static final String PREFIX = "mongodb://";
+    private static final String MONGODB_PREFIX = "mongodb://";
+    private static final String MONGODB_SRV_PREFIX = "mongodb+srv://";
+    private static final Set<String> ALLOWED_OPTIONS_IN_TXT_RECORD = new HashSet<String>(asList("authsource", "replicaset"));
     private static final String UTF_8 = "UTF-8";
 
     private static final Logger LOGGER = Loggers.getLogger("uri");
 
-    private final MongoCredential credentials;
+    private final MongoCredential credential;
+    private final boolean isSrvProtocol;
     private final List<String> hosts;
     private final String database;
     private final String collection;
@@ -197,6 +250,7 @@ public class ConnectionString {
 
     private ReadPreference readPreference;
     private WriteConcern writeConcern;
+    private Boolean retryWrites;
     private ReadConcern readConcern;
 
     private Integer minConnectionPoolSize;
@@ -214,6 +268,8 @@ public class ConnectionString {
     private Integer serverSelectionTimeout;
     private Integer localThreshold;
     private Integer heartbeatFrequency;
+    private String applicationName;
+    private List<MongoCompressor> compressorList;
 
     /**
      * Creates a ConnectionString from the given string.
@@ -223,16 +279,23 @@ public class ConnectionString {
      */
     public ConnectionString(final String connectionString) {
         this.connectionString = connectionString;
-        if (!connectionString.startsWith(PREFIX)) {
+        boolean isMongoDBProtocol = connectionString.startsWith(MONGODB_PREFIX);
+        isSrvProtocol = connectionString.startsWith(MONGODB_SRV_PREFIX);
+        if (!isMongoDBProtocol && !isSrvProtocol) {
             throw new IllegalArgumentException(format("The connection string is invalid. "
-                    + "Connection strings must start with '%s'", PREFIX));
+                    + "Connection strings must start with either '%s' or '%s", MONGODB_PREFIX, MONGODB_SRV_PREFIX));
         }
 
-        String unprocessedConnectionString = connectionString.substring(PREFIX.length());
+        String unprocessedConnectionString;
+        if (isMongoDBProtocol) {
+            unprocessedConnectionString = connectionString.substring(MONGODB_PREFIX.length());
+        } else {
+            unprocessedConnectionString = connectionString.substring(MONGODB_SRV_PREFIX.length());
+        }
 
         // Split out the user and host information
-        String userAndHostInformation = null;
-        int idx = unprocessedConnectionString.lastIndexOf("/");
+        String userAndHostInformation;
+        int idx = unprocessedConnectionString.indexOf("/");
         if (idx == -1) {
             if (unprocessedConnectionString.contains("?")) {
                 throw new IllegalArgumentException("The connection string contains options without trailing slash");
@@ -245,13 +308,13 @@ public class ConnectionString {
         }
 
         // Split the user and host information
-        String userInfo = null;
-        String hostIdentifier = null;
+        String userInfo;
+        String hostIdentifier;
         String userName = null;
         char[] password = null;
         idx = userAndHostInformation.lastIndexOf("@");
         if (idx > 0) {
-            userInfo = userAndHostInformation.substring(0, idx);
+            userInfo = userAndHostInformation.substring(0, idx).replace("+", "%2B");
             hostIdentifier = userAndHostInformation.substring(idx + 1);
             int colonCount = countOccurrences(userInfo, ":");
             if (userInfo.contains("@") || colonCount > 1) {
@@ -270,10 +333,19 @@ public class ConnectionString {
         }
 
         // Validate the hosts
-        hosts = Collections.unmodifiableList(parseHosts(asList(hostIdentifier.split(","))));
+        List<String> unresolvedHosts = unmodifiableList(parseHosts(asList(hostIdentifier.split(","))));
+        if (isSrvProtocol) {
+            if (unresolvedHosts.size() > 1) {
+                throw new IllegalArgumentException("Only one host allowed when using mongodb+srv protocol");
+            }
+            if (unresolvedHosts.get(0).contains(":")) {
+                throw new IllegalArgumentException("Host for when using mongodb+srv protocol can not contain a port");
+            }
+        }
+        this.hosts = unresolvedHosts;
 
         // Process the authDB section
-        String nsPart = null;
+        String nsPart;
         idx = unprocessedConnectionString.indexOf("?");
         if (idx == -1) {
             nsPart = unprocessedConnectionString;
@@ -292,21 +364,36 @@ public class ConnectionString {
                 database = nsPart.substring(0, idx);
                 collection = nsPart.substring(idx + 1);
             }
+            MongoNamespace.checkDatabaseNameValidity(database);
         } else {
             database = null;
             collection = null;
         }
 
-        Map<String, List<String>> optionsMap = parseOptions(unprocessedConnectionString);
-        translateOptions(optionsMap);
-        credentials = createCredentials(optionsMap, userName, password);
-        warnOnUnsupportedOptions(optionsMap);
+        String txtRecordsQueryParameters = isSrvProtocol
+                ? new DefaultDnsResolver().resolveAdditionalQueryParametersFromTxtRecords(unresolvedHosts.get(0)) : "";
+        String connectionStringQueryParamenters = unprocessedConnectionString;
+
+        Map<String, List<String>> connectionStringOptionsMap = parseOptions(connectionStringQueryParamenters);
+        Map<String, List<String>> txtRecordsOptionsMap = parseOptions(txtRecordsQueryParameters);
+        if (!ALLOWED_OPTIONS_IN_TXT_RECORD.containsAll(txtRecordsOptionsMap.keySet())) {
+            throw new MongoConfigurationException(format("A TXT record is only permitted to contain the keys %s, but the TXT record for "
+            + "'%s' contains the keys %s", ALLOWED_OPTIONS_IN_TXT_RECORD, unresolvedHosts.get(0), txtRecordsOptionsMap.keySet()));
+        }
+        Map<String, List<String>> combinedOptionsMaps = combineOptionsMaps(txtRecordsOptionsMap, connectionStringOptionsMap);
+        if (isSrvProtocol && !combinedOptionsMaps.containsKey("ssl")) {
+            combinedOptionsMaps.put("ssl", singletonList("true"));
+        }
+        translateOptions(combinedOptionsMaps);
+        credential = createCredentials(combinedOptionsMaps, userName, password);
+        warnOnUnsupportedOptions(combinedOptionsMaps);
     }
 
-    private static final Set<String> GENERAL_OPTIONS_KEYS = new HashSet<String>();
+    private static final Set<String> GENERAL_OPTIONS_KEYS = new LinkedHashSet<String>();
     private static final Set<String> AUTH_KEYS = new HashSet<String>();
     private static final Set<String> READ_PREFERENCE_KEYS = new HashSet<String>();
     private static final Set<String> WRITE_CONCERN_KEYS = new HashSet<String>();
+    private static final Set<String> COMPRESSOR_KEYS = new HashSet<String>();
     private static final Set<String> ALL_KEYS = new HashSet<String>();
 
     static {
@@ -318,20 +405,37 @@ public class ConnectionString {
         GENERAL_OPTIONS_KEYS.add("maxidletimems");
         GENERAL_OPTIONS_KEYS.add("maxlifetimems");
         GENERAL_OPTIONS_KEYS.add("sockettimeoutms");
-        GENERAL_OPTIONS_KEYS.add("sockettimeoutms");
+
+        // Order matters here: Having tls after ssl means than the tls option will supersede the ssl option when both are set
         GENERAL_OPTIONS_KEYS.add("ssl");
-        GENERAL_OPTIONS_KEYS.add("streamtype");
+        GENERAL_OPTIONS_KEYS.add("tls");
+
+        // Order matters here: Having tlsinsecure before sslinvalidhostnameallowed and tlsallowinvalidhostnames means that those options
+        // will supersede this one when both are set.
+        GENERAL_OPTIONS_KEYS.add("tlsinsecure");
+
+        // Order matters here: Having tlsallowinvalidhostnames after sslinvalidhostnameallowed means than the tlsallowinvalidhostnames
+        // option will supersede the sslinvalidhostnameallowed option when both are set
         GENERAL_OPTIONS_KEYS.add("sslinvalidhostnameallowed");
+        GENERAL_OPTIONS_KEYS.add("tlsallowinvalidhostnames");
+
         GENERAL_OPTIONS_KEYS.add("replicaset");
         GENERAL_OPTIONS_KEYS.add("readconcernlevel");
+        GENERAL_OPTIONS_KEYS.add("streamtype");
 
         GENERAL_OPTIONS_KEYS.add("serverselectiontimeoutms");
         GENERAL_OPTIONS_KEYS.add("localthresholdms");
         GENERAL_OPTIONS_KEYS.add("heartbeatfrequencyms");
+        GENERAL_OPTIONS_KEYS.add("retrywrites");
+
+        GENERAL_OPTIONS_KEYS.add("appname");
+
+        COMPRESSOR_KEYS.add("compressors");
+        COMPRESSOR_KEYS.add("zlibcompressionlevel");
 
         READ_PREFERENCE_KEYS.add("readpreference");
         READ_PREFERENCE_KEYS.add("readpreferencetags");
-        READ_PREFERENCE_KEYS.add("maxstalenessms");
+        READ_PREFERENCE_KEYS.add("maxstalenessseconds");
 
         WRITE_CONCERN_KEYS.add("safe");
         WRITE_CONCERN_KEYS.add("w");
@@ -348,25 +452,40 @@ public class ConnectionString {
         ALL_KEYS.addAll(AUTH_KEYS);
         ALL_KEYS.addAll(READ_PREFERENCE_KEYS);
         ALL_KEYS.addAll(WRITE_CONCERN_KEYS);
+        ALL_KEYS.addAll(COMPRESSOR_KEYS);
     }
+
+    // Any options contained in the connection string completely replace the corresponding options specified in TXT records,
+    // even for options which multiple values, e.g. readPreferenceTags
+    private Map<String, List<String>> combineOptionsMaps(final Map<String, List<String>> txtRecordsOptionsMap,
+                                                         final Map<String, List<String>> connectionStringOptionsMap) {
+        Map<String, List<String>> combinedOptionsMaps = new HashMap<String, List<String>>(txtRecordsOptionsMap);
+        for (Map.Entry<String, List<String>> entry : connectionStringOptionsMap.entrySet()) {
+            combinedOptionsMaps.put(entry.getKey(), entry.getValue());
+        }
+        return combinedOptionsMaps;
+    }
+
 
     private void warnOnUnsupportedOptions(final Map<String, List<String>> optionsMap) {
         for (final String key : optionsMap.keySet()) {
             if (!ALL_KEYS.contains(key)) {
                 if (LOGGER.isWarnEnabled()) {
-                    LOGGER.warn(format("Unsupported option '%s' in the connection string '%s'.", key, connectionString));
+                    LOGGER.warn(format("Connection string contains unsupported option '%s'.", key));
                 }
             }
         }
     }
 
     private void translateOptions(final Map<String, List<String>> optionsMap) {
+        boolean tlsInsecureSet = false;
+        boolean tlsAllowInvalidHostnamesSet = false;
+
         for (final String key : GENERAL_OPTIONS_KEYS) {
             String value = getLastValue(optionsMap, key);
             if (value == null) {
                 continue;
             }
-
             if (key.equals("maxpoolsize")) {
                 maxConnectionPoolSize = parseInteger(value, "maxpoolsize");
             } else if (key.equals("minpoolsize")) {
@@ -383,12 +502,23 @@ public class ConnectionString {
                 connectTimeout = parseInteger(value, "connecttimeoutms");
             } else if (key.equals("sockettimeoutms")) {
                 socketTimeout = parseInteger(value, "sockettimeoutms");
-            } else if (key.equals("sslinvalidhostnameallowed") && parseBoolean(value, "sslinvalidhostnameallowed")) {
-                sslInvalidHostnameAllowed = true;
-            } else if (key.equals("ssl") && parseBoolean(value, "ssl")) {
-                sslEnabled = true;
+            } else if (key.equals("tlsallowinvalidhostnames")) {
+                sslInvalidHostnameAllowed = parseBoolean(value, "tlsAllowInvalidHostnames");
+                tlsAllowInvalidHostnamesSet = true;
+            } else if (key.equals("sslinvalidhostnameallowed")) {
+                sslInvalidHostnameAllowed = parseBoolean(value, "sslinvalidhostnameallowed");
+                tlsAllowInvalidHostnamesSet = true;
+            } else if (key.equals("tlsinsecure")) {
+                sslInvalidHostnameAllowed = parseBoolean(value, "tlsinsecure");
+                tlsInsecureSet = true;
+            } else if (key.equals("ssl")) {
+                initializeSslEnabled("ssl", value);
+            } else if (key.equals("tls")) {
+                initializeSslEnabled("tls", value);
             } else if (key.equals("streamtype")) {
                 streamType = value;
+                LOGGER.warn("The streamType query parameter is deprecated and support for it will be removed"
+                        + " in the next major release.");
             } else if (key.equals("replicaset")) {
                 requiredReplicaSetName = value;
             } else if (key.equals("readconcernlevel")) {
@@ -399,13 +529,73 @@ public class ConnectionString {
                 localThreshold = parseInteger(value, "localthresholdms");
             } else if (key.equals("heartbeatfrequencyms")) {
                 heartbeatFrequency = parseInteger(value, "heartbeatfrequencyms");
+            } else if (key.equals("appname")) {
+                applicationName = value;
+            } else if (key.equals("retrywrites")) {
+                retryWrites = parseBoolean(value, "retrywrites");
             }
+        }
+
+        if (tlsInsecureSet && tlsAllowInvalidHostnamesSet) {
+            throw new IllegalArgumentException("tlsAllowInvalidHostnames or sslInvalidHostnameAllowed set along with tlsInsecure "
+                    + "is not allowed");
         }
 
         writeConcern = createWriteConcern(optionsMap);
         readPreference = createReadPreference(optionsMap);
+        compressorList = createCompressors(optionsMap);
     }
 
+    private void initializeSslEnabled(final String key, final String value) {
+        boolean booleanValue = parseBoolean(value, key);
+        if (sslEnabled != null && sslEnabled != booleanValue) {
+            throw new IllegalArgumentException("Conflicting tls and ssl parameter values are not allowed");
+        }
+        sslEnabled = booleanValue;
+    }
+
+    private List<MongoCompressor> createCompressors(final Map<String, List<String>> optionsMap) {
+        String compressors = "";
+        Integer zlibCompressionLevel = null;
+
+        for (final String key : COMPRESSOR_KEYS) {
+            String value = getLastValue(optionsMap, key);
+            if (value == null) {
+                continue;
+            }
+
+            if (key.equals("compressors")) {
+                compressors = value;
+            } else if (key.equals("zlibcompressionlevel")) {
+                zlibCompressionLevel = Integer.parseInt(value);
+            }
+        }
+        return buildCompressors(compressors, zlibCompressionLevel);
+    }
+
+    private List<MongoCompressor> buildCompressors(final String compressors, @Nullable final Integer zlibCompressionLevel) {
+        List<MongoCompressor> compressorsList = new ArrayList<MongoCompressor>();
+
+        for (String cur : compressors.split(",")) {
+            if (cur.equals("zlib")) {
+                MongoCompressor zlibCompressor = MongoCompressor.createZlibCompressor();
+                if (zlibCompressionLevel != null) {
+                    zlibCompressor = zlibCompressor.withProperty(MongoCompressor.LEVEL, zlibCompressionLevel);
+                }
+                compressorsList.add(zlibCompressor);
+            } else if (cur.equals("snappy")) {
+                compressorsList.add(MongoCompressor.createSnappyCompressor());
+            } else if (cur.equals("zstd")) {
+                compressorsList.add(MongoCompressor.createZstdCompressor());
+            } else if (!cur.isEmpty()) {
+                throw new IllegalArgumentException("Unsupported compressor '" + cur + "'");
+            }
+        }
+
+        return unmodifiableList(compressorsList);
+    }
+
+    @Nullable
     private WriteConcern createWriteConcern(final Map<String, List<String>> optionsMap) {
         Boolean safe = null;
         String w = null;
@@ -434,10 +624,11 @@ public class ConnectionString {
         return buildWriteConcern(safe, w, wTimeout, fsync, journal);
     }
 
+    @Nullable
     private ReadPreference createReadPreference(final Map<String, List<String>> optionsMap) {
         String readPreferenceType = null;
         List<TagSet> tagSetList = new ArrayList<TagSet>();
-        long maxStalenessMS = 0;
+        long maxStalenessSeconds = -1;
 
         for (final String key : READ_PREFERENCE_KEYS) {
             String value = getLastValue(optionsMap, key);
@@ -447,8 +638,8 @@ public class ConnectionString {
 
             if (key.equals("readpreference")) {
                 readPreferenceType = value;
-            } else if (key.equals("maxstalenessms")) {
-                 maxStalenessMS = Integer.parseInt(value);
+            } else if (key.equals("maxstalenessseconds")) {
+                 maxStalenessSeconds = parseInteger(value, "maxstalenessseconds");
             } else if (key.equals("readpreferencetags")) {
                 for (final String cur : optionsMap.get(key)) {
                     TagSet tagSet = getTags(cur.trim());
@@ -456,17 +647,14 @@ public class ConnectionString {
                 }
             }
         }
-        return buildReadPreference(readPreferenceType, tagSetList, maxStalenessMS);
+        return buildReadPreference(readPreferenceType, tagSetList, maxStalenessSeconds);
     }
 
-    private MongoCredential createCredentials(final Map<String, List<String>> optionsMap, final String userName,
-                                              final char[] password) {
-        if (userName == null) {
-            return null;
-        }
-
+    @Nullable
+    private MongoCredential createCredentials(final Map<String, List<String>> optionsMap, @Nullable final String userName,
+                                              @Nullable final char[] password) {
         AuthenticationMechanism mechanism = null;
-        String authSource = (database == null) ? "admin" : database;
+        String authSource = null;
         String gssapiServiceName = null;
         String authMechanismProperties = null;
 
@@ -483,33 +671,21 @@ public class ConnectionString {
                 authSource = value;
             } else if (key.equals("gssapiservicename")) {
                 gssapiServiceName = value;
-            } else if (key.endsWith("authmechanismproperties")) {
+            } else if (key.equals("authmechanismproperties")) {
                 authMechanismProperties = value;
             }
         }
 
-        MongoCredential credential;
-        if (mechanism == GSSAPI) {
-            credential = MongoCredential.createGSSAPICredential(userName);
-            if (gssapiServiceName != null) {
-                credential = credential.withMechanismProperty("SERVICE_NAME", gssapiServiceName);
-            }
-        } else if (mechanism == PLAIN) {
-            credential = MongoCredential.createPlainCredential(userName, authSource, password);
-        } else if (mechanism == MONGODB_CR) {
-            credential = MongoCredential.createMongoCRCredential(userName, authSource, password);
-        } else if (mechanism == MONGODB_X509) {
-            credential = MongoCredential.createMongoX509Credential(userName);
-        } else if (mechanism == SCRAM_SHA_1) {
-            credential = MongoCredential.createScramSha1Credential(userName, authSource, password);
-        } else if (mechanism == null) {
-            credential = MongoCredential.createCredential(userName, authSource, password);
-        } else {
-            throw new UnsupportedOperationException(format("The connection string contains an invalid authentication mechanism'. "
-                    + "'%s' is not a supported authentication mechanism", mechanism));
+
+        MongoCredential credential = null;
+        if (mechanism != null) {
+            credential = createMongoCredentialWithMechanism(mechanism, userName, password, authSource, gssapiServiceName);
+        } else if (userName != null) {
+            credential = MongoCredential.createCredential(userName,
+                    getAuthSourceOrDefault(authSource, database != null ? database : "admin"), password);
         }
 
-        if (authMechanismProperties != null) {
+        if (credential != null && authMechanismProperties != null) {
             for (String part : authMechanismProperties.split(",")) {
                 String[] mechanismPropertyKeyValue = part.split(":");
                 if (mechanismPropertyKeyValue.length != 2) {
@@ -528,6 +704,73 @@ public class ConnectionString {
         return credential;
     }
 
+    @SuppressWarnings("deprecation")
+    private MongoCredential createMongoCredentialWithMechanism(final AuthenticationMechanism mechanism, final String userName,
+                                                               @Nullable final char[] password,
+                                                               @Nullable final String authSource,
+                                                               @Nullable final String gssapiServiceName) {
+        MongoCredential credential;
+        String mechanismAuthSource;
+        switch (mechanism) {
+            case PLAIN:
+                mechanismAuthSource = getAuthSourceOrDefault(authSource, database != null ? database : "$external");
+                break;
+            case GSSAPI:
+            case MONGODB_X509:
+                mechanismAuthSource = getAuthSourceOrDefault(authSource, "$external");
+                if (!mechanismAuthSource.equals("$external")) {
+                    throw new IllegalArgumentException(format("Invalid authSource for %s, it must be '$external'", mechanism));
+                }
+                break;
+            default:
+                mechanismAuthSource = getAuthSourceOrDefault(authSource, database != null ? database : "admin");
+        }
+
+        switch (mechanism) {
+            case GSSAPI:
+                credential = MongoCredential.createGSSAPICredential(userName);
+                if (gssapiServiceName != null) {
+                    credential = credential.withMechanismProperty("SERVICE_NAME", gssapiServiceName);
+                }
+                if (password != null && LOGGER.isWarnEnabled()) {
+                    LOGGER.warn("Password in connection string not used with MONGODB_X509 authentication mechanism.");
+                }
+                break;
+            case PLAIN:
+                credential = MongoCredential.createPlainCredential(userName, mechanismAuthSource, password);
+                break;
+            case MONGODB_CR:
+                credential = MongoCredential.createMongoCRCredential(userName, mechanismAuthSource, password);
+                break;
+            case MONGODB_X509:
+                if (password != null) {
+                    throw new IllegalArgumentException("Invalid mechanism, MONGODB_x509 does not support passwords");
+                }
+                credential = MongoCredential.createMongoX509Credential(userName);
+                break;
+            case SCRAM_SHA_1:
+                credential = MongoCredential.createScramSha1Credential(userName, mechanismAuthSource, password);
+                break;
+            case SCRAM_SHA_256:
+                credential = MongoCredential.createScramSha256Credential(userName, mechanismAuthSource, password);
+                break;
+            default:
+                throw new UnsupportedOperationException(format("The connection string contains an invalid authentication mechanism'. "
+                                                                       + "'%s' is not a supported authentication mechanism",
+                        mechanism));
+        }
+        return credential;
+    }
+
+    private String getAuthSourceOrDefault(@Nullable final String authSource, final String defaultAuthSource) {
+        if (authSource != null) {
+            return authSource;
+        } else {
+            return defaultAuthSource;
+        }
+    }
+
+    @Nullable
     private String getLastValue(final Map<String, List<String>> optionsMap, final String key) {
         List<String> valueList = optionsMap.get(key);
         if (valueList == null) {
@@ -570,8 +813,9 @@ public class ConnectionString {
             }
         }
         // handle legacy slaveok settings
-        if (optionsMap.containsKey("slaveok") && !optionsMap.containsKey("readpreference")) {
-            String readPreference = parseBoolean(getLastValue(optionsMap, "slaveok"), "slaveok")
+        String slaveok = getLastValue(optionsMap, "slaveok");
+        if (slaveok != null && !optionsMap.containsKey("readpreference")) {
+            String readPreference = parseBoolean(slaveok, "slaveok")
                                     ? "secondaryPreferred" : "primary";
             optionsMap.put("readpreference", singletonList(readPreference));
             if (LOGGER.isWarnEnabled()) {
@@ -589,14 +833,18 @@ public class ConnectionString {
         return optionsMap;
     }
 
-    private ReadPreference buildReadPreference(final String readPreferenceType,
-                                               final List<TagSet> tagSetList, final long maxStalenessMS) {
+    @Nullable
+    private ReadPreference buildReadPreference(@Nullable final String readPreferenceType,
+                                               final List<TagSet> tagSetList, final long maxStalenessSeconds) {
         if (readPreferenceType != null) {
-            if (tagSetList.isEmpty() && maxStalenessMS == 0) {
+            if (tagSetList.isEmpty() && maxStalenessSeconds == -1) {
                 return ReadPreference.valueOf(readPreferenceType);
+            } else if (maxStalenessSeconds == -1) {
+               return ReadPreference.valueOf(readPreferenceType, tagSetList);
+            } else {
+                return ReadPreference.valueOf(readPreferenceType, tagSetList, maxStalenessSeconds, TimeUnit.SECONDS);
             }
-            return ReadPreference.valueOf(readPreferenceType, tagSetList, maxStalenessMS, TimeUnit.MILLISECONDS);
-        } else if (!(tagSetList.isEmpty() && maxStalenessMS == 0)) {
+        } else if (!(tagSetList.isEmpty() && maxStalenessSeconds == -1)) {
             throw new IllegalArgumentException("Read preference mode must be specified if "
                                                        + "either read preference tags or max staleness is specified");
         }
@@ -604,8 +852,10 @@ public class ConnectionString {
     }
 
     @SuppressWarnings("deprecation")
-    private WriteConcern buildWriteConcern(final Boolean safe, final String w,
-                                           final Integer wTimeout, final Boolean fsync, final Boolean journal) {
+    @Nullable
+    private WriteConcern buildWriteConcern(@Nullable final Boolean safe, @Nullable final String w,
+                                           @Nullable final Integer wTimeout, @Nullable final Boolean fsync,
+                                           @Nullable final Boolean journal) {
         WriteConcern retVal = null;
         if (w != null || wTimeout != null || fsync != null || journal != null) {
             if (w == null) {
@@ -682,8 +932,7 @@ public class ConnectionString {
             if (host.length() == 0) {
                 throw new IllegalArgumentException(format("The connection string contains an empty host '%s'. ", rawHosts));
             } else if (host.endsWith(".sock")) {
-                throw new IllegalArgumentException(format("The connection string contains an invalid host '%s'. "
-                        + "Unix Domain Socket which is not supported by the Java driver", host));
+                host = urldecode(host);
             } else if (host.startsWith("[")) {
                 if (!host.contains("]")) {
                     throw new IllegalArgumentException(format("The connection string contains an invalid host '%s'. "
@@ -753,8 +1002,9 @@ public class ConnectionString {
      *
      * @return the username
      */
+    @Nullable
     public String getUsername() {
-        return credentials != null ? credentials.getUserName() : null;
+        return credential != null ? credential.getUserName() : null;
     }
 
     /**
@@ -762,8 +1012,18 @@ public class ConnectionString {
      *
      * @return the password
      */
+    @Nullable
     public char[] getPassword() {
-        return credentials != null ? credentials.getPassword() : null;
+        return credential != null ? credential.getPassword() : null;
+    }
+
+    /**
+     * Returns true if the connection string requires SRV protocol to resolve the host lists from the configured host.
+     *
+     * @return true if SRV protocol is required to resolve hosts.
+     */
+    public boolean isSrvProtocol() {
+        return isSrvProtocol;
     }
 
     /**
@@ -780,6 +1040,7 @@ public class ConnectionString {
      *
      * @return the database name
      */
+    @Nullable
     public String getDatabase() {
         return database;
     }
@@ -790,6 +1051,7 @@ public class ConnectionString {
      *
      * @return the collection name
      */
+    @Nullable
     public String getCollection() {
         return collection;
     }
@@ -817,18 +1079,32 @@ public class ConnectionString {
 
 
     /**
-     * Gets the credentials.
+     * Gets the credentials in an immutable list.  The list will be empty if no credentials were specified in the connection string.
      *
-     * @return the credentials
+     * @return the credentials in an immutable list
+     * @deprecated Prefer {@link #getCredential()}
      */
+    @Deprecated
     public List<MongoCredential> getCredentialList() {
-        return credentials != null ? asList(credentials) : new ArrayList<MongoCredential>();
+        return credential != null ? singletonList(credential) : Collections.<MongoCredential>emptyList();
+    }
+
+    /**
+     * Gets the credential or null if no credentials were specified in the connection string.
+     *
+     * @return the credentials in an immutable list
+     * @since 3.6
+     */
+    @Nullable
+    public MongoCredential getCredential() {
+        return credential;
     }
 
     /**
      * Gets the read preference specified in the connection string.
      * @return the read preference
      */
+    @Nullable
     public ReadPreference getReadPreference() {
         return readPreference;
     }
@@ -837,6 +1113,7 @@ public class ConnectionString {
      * Gets the read concern specified in the connection string.
      * @return the read concern
      */
+    @Nullable
     public ReadConcern getReadConcern() {
         return readConcern;
     }
@@ -845,14 +1122,46 @@ public class ConnectionString {
      * Gets the write concern specified in the connection string.
      * @return the write concern
      */
+    @Nullable
     public WriteConcern getWriteConcern() {
         return writeConcern;
+    }
+
+    /**
+     * Returns true if writes should be retried if they fail due to a network error, and false otherwise
+     *
+     * <p>Starting with the 3.11.0 release, the default value is true</p>
+     *
+     * @return the retryWrites value, or true if unset
+     * @since 3.6
+     * @mongodb.server.release 3.6
+     * @deprecated Prefer {@link #getRetryWritesValue()}
+     */
+    @Deprecated
+    public boolean getRetryWrites() {
+        return retryWrites == null ? true : retryWrites;
+    }
+
+    /**
+     * <p>Gets whether writes should be retried if they fail due to a network error</p>
+     *
+     * The name of this method differs from others in this class so as not to conflict with the deprecated (and soon to be removed)
+     * {@link #getRetryWrites()} method, which returns a primitive {@code boolean} value, which doesn't allow callers to differentiate
+     * between a false value and an unset value.
+     *
+     * @return the retryWrites value, or null if unset
+     * @since 3.9
+     * @mongodb.server.release 3.6
+     */
+    public Boolean getRetryWritesValue() {
+        return retryWrites;
     }
 
     /**
      * Gets the minimum connection pool size specified in the connection string.
      * @return the minimum connection pool size
      */
+    @Nullable
     public Integer getMinConnectionPoolSize() {
         return minConnectionPoolSize;
     }
@@ -861,6 +1170,7 @@ public class ConnectionString {
      * Gets the maximum connection pool size specified in the connection string.
      * @return the maximum connection pool size
      */
+    @Nullable
     public Integer getMaxConnectionPoolSize() {
         return maxConnectionPoolSize;
     }
@@ -869,6 +1179,7 @@ public class ConnectionString {
      * Gets the multiplier for the number of threads allowed to block waiting for a connection specified in the connection string.
      * @return the multiplier for the number of threads allowed to block waiting for a connection
      */
+    @Nullable
     public Integer getThreadsAllowedToBlockForConnectionMultiplier() {
         return threadsAllowedToBlockForConnectionMultiplier;
     }
@@ -877,6 +1188,7 @@ public class ConnectionString {
      * Gets the maximum wait time of a thread waiting for a connection specified in the connection string.
      * @return the maximum wait time of a thread waiting for a connection
      */
+    @Nullable
     public Integer getMaxWaitTime() {
         return maxWaitTime;
     }
@@ -885,6 +1197,7 @@ public class ConnectionString {
      * Gets the maximum connection idle time specified in the connection string.
      * @return the maximum connection idle time
      */
+    @Nullable
     public Integer getMaxConnectionIdleTime() {
         return maxConnectionIdleTime;
     }
@@ -893,6 +1206,7 @@ public class ConnectionString {
      * Gets the maximum connection life time specified in the connection string.
      * @return the maximum connection life time
      */
+    @Nullable
     public Integer getMaxConnectionLifeTime() {
         return maxConnectionLifeTime;
     }
@@ -901,6 +1215,7 @@ public class ConnectionString {
      * Gets the socket connect timeout specified in the connection string.
      * @return the socket connect timeout
      */
+    @Nullable
     public Integer getConnectTimeout() {
         return connectTimeout;
     }
@@ -909,6 +1224,7 @@ public class ConnectionString {
      * Gets the socket timeout specified in the connection string.
      * @return the socket timeout
      */
+    @Nullable
     public Integer getSocketTimeout() {
         return socketTimeout;
     }
@@ -917,6 +1233,7 @@ public class ConnectionString {
      * Gets the SSL enabled value specified in the connection string.
      * @return the SSL enabled value
      */
+    @Nullable
     public Boolean getSslEnabled() {
         return sslEnabled;
     }
@@ -925,7 +1242,11 @@ public class ConnectionString {
      * Gets the stream type value specified in the connection string.
      * @return the stream type value
      * @since 3.3
+     * @deprecated Use {@link MongoClientSettings.Builder#streamFactoryFactory(StreamFactoryFactory)} to configure the stream type
+     * programmatically
      */
+    @Deprecated
+    @Nullable
     public String getStreamType() {
         return streamType;
     }
@@ -936,6 +1257,7 @@ public class ConnectionString {
      * @return the SSL invalidHostnameAllowed value
      * @since 3.3
      */
+    @Nullable
     public Boolean getSslInvalidHostnameAllowed() {
         return sslInvalidHostnameAllowed;
     }
@@ -944,6 +1266,7 @@ public class ConnectionString {
      * Gets the required replica set name specified in the connection string.
      * @return the required replica set name
      */
+    @Nullable
     public String getRequiredReplicaSetName() {
         return requiredReplicaSetName;
     }
@@ -953,6 +1276,7 @@ public class ConnectionString {
      * @return the server selection timeout (in milliseconds), or null if unset
      * @since 3.3
      */
+    @Nullable
     public Integer getServerSelectionTimeout() {
         return serverSelectionTimeout;
     }
@@ -962,6 +1286,7 @@ public class ConnectionString {
      * @return the local threshold (in milliseconds), or null if unset
      * since 3.3
      */
+    @Nullable
     public Integer getLocalThreshold() {
         return localThreshold;
     }
@@ -971,10 +1296,35 @@ public class ConnectionString {
      * @return the heartbeat frequency (in milliseconds), or null if unset
      * since 3.3
      */
+    @Nullable
     public Integer getHeartbeatFrequency() {
         return heartbeatFrequency;
     }
 
+    /**
+     * Gets the logical name of the application.  The application name may be used by the client to identify the application to the server,
+     * for use in server logs, slow query logs, and profile collection.
+     *
+     * <p>Default is null.</p>
+     *
+     * @return the application name, which may be null
+     * @since 3.4
+     * @mongodb.server.release 3.4
+     */
+    @Nullable
+    public String getApplicationName() {
+        return applicationName;
+    }
+
+    /**
+     * Gets the list of compressors.
+     *
+     * @return the non-null list of compressors
+     * @since 3.6
+     */
+    public List<MongoCompressor> getCompressorList() {
+        return compressorList;
+    }
 
     @Override
     public String toString() {
@@ -998,7 +1348,7 @@ public class ConnectionString {
         if (connectTimeout != null ? !connectTimeout.equals(that.connectTimeout) : that.connectTimeout != null) {
             return false;
         }
-        if (credentials != null ? !credentials.equals(that.credentials) : that.credentials != null) {
+        if (credential != null ? !credential.equals(that.credential) : that.credential != null) {
             return false;
         }
         if (database != null ? !database.equals(that.database) : that.database != null) {
@@ -1047,13 +1397,19 @@ public class ConnectionString {
         if (writeConcern != null ? !writeConcern.equals(that.writeConcern) : that.writeConcern != null) {
             return false;
         }
+        if (applicationName != null ? !applicationName.equals(that.applicationName) : that.applicationName != null) {
+            return false;
+        }
+        if (!compressorList.equals(that.compressorList)) {
+            return false;
+        }
 
         return true;
     }
 
     @Override
     public int hashCode() {
-        int result = credentials != null ? credentials.hashCode() : 0;
+        int result = credential != null ? credential.hashCode() : 0;
         result = 31 * result + hosts.hashCode();
         result = 31 * result + (database != null ? database.hashCode() : 0);
         result = 31 * result + (collection != null ? collection.hashCode() : 0);
@@ -1071,6 +1427,8 @@ public class ConnectionString {
         result = 31 * result + (socketTimeout != null ? socketTimeout.hashCode() : 0);
         result = 31 * result + (sslEnabled != null ? sslEnabled.hashCode() : 0);
         result = 31 * result + (requiredReplicaSetName != null ? requiredReplicaSetName.hashCode() : 0);
+        result = 31 * result + (applicationName != null ? applicationName.hashCode() : 0);
+        result = 31 * result + compressorList.hashCode();
         return result;
     }
 }

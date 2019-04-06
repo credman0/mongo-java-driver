@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2014 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import static com.mongodb.assertions.Assertions.notNull;
 
 /**
- * A StreamFactory for Streams based on Netty 4.0
+ * A StreamFactory for Streams based on <a href='http://netty.io/'>Netty</a> 4.x.
  *
  * @since 3.0
  */
@@ -77,13 +77,26 @@ public class NettyStreamFactory implements StreamFactory {
     }
 
     /**
+     * Construct a new instance of the factory.
+     *
+     * @param settings the socket settings
+     * @param sslSettings the SSL settings
+     * @param eventLoopGroup the event loop group that all channels created by this factory will be a part of
+     *
+     * @since 3.4
+     */
+    public NettyStreamFactory(final SocketSettings settings, final SslSettings sslSettings, final EventLoopGroup eventLoopGroup) {
+        this(settings, sslSettings, eventLoopGroup, PooledByteBufAllocator.DEFAULT);
+    }
+
+    /**
      * Construct a new instance of the factory with a default allocator, nio event loop group and nio socket channel.
      *
      * @param settings the socket settings
      * @param sslSettings the SSL settings
      */
     public NettyStreamFactory(final SocketSettings settings, final SslSettings sslSettings) {
-        this(settings, sslSettings, new NioEventLoopGroup(), PooledByteBufAllocator.DEFAULT);
+        this(settings, sslSettings, new NioEventLoopGroup());
     }
 
     @Override

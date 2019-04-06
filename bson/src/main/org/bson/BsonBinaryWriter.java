@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,11 @@ import org.bson.io.BsonOutput;
 import org.bson.types.Decimal128;
 import org.bson.types.ObjectId;
 
+import java.util.List;
 import java.util.Stack;
 
 import static java.lang.String.format;
+import static org.bson.assertions.Assertions.notNull;
 
 /**
  * A BsonWriter implementation that writes to a binary stream of data.  This is the most commonly used implementation.
@@ -96,6 +98,14 @@ public class BsonBinaryWriter extends AbstractBsonWriter {
      */
     public BsonOutput getBsonOutput() {
         return bsonOutput;
+    }
+
+    /**
+     * @return the BsonBinaryWriterSettings
+     * @since 3.6
+     */
+    public BsonBinaryWriterSettings getBinaryWriterSettings() {
+        return binaryWriterSettings;
     }
 
     @Override
@@ -282,8 +292,7 @@ public class BsonBinaryWriter extends AbstractBsonWriter {
     public void doWriteTimestamp(final BsonTimestamp value) {
         bsonOutput.writeByte(BsonType.TIMESTAMP.getValue());
         writeCurrentName();
-        bsonOutput.writeInt32(value.getInc());
-        bsonOutput.writeInt32(value.getTime());
+        bsonOutput.writeInt64(value.getValue());
     }
 
     @Override
@@ -294,6 +303,18 @@ public class BsonBinaryWriter extends AbstractBsonWriter {
 
     @Override
     public void pipe(final BsonReader reader) {
+        notNull("reader", reader);
+        pipeDocument(reader, null);
+    }
+
+    @Override
+    public void pipe(final BsonReader reader, final List<BsonElement> extraElements) {
+        notNull("reader", reader);
+        notNull("extraElements", extraElements);
+        pipeDocument(reader, extraElements);
+    }
+
+    private void pipeDocument(final BsonReader reader, final List<BsonElement> extraElements) {
         if (reader instanceof BsonBinaryReader) {
             BsonBinaryReader binaryReader = (BsonBinaryReader) reader;
             if (getState() == State.VALUE) {
@@ -305,11 +326,23 @@ public class BsonBinaryWriter extends AbstractBsonWriter {
             if (size < 5) {
                 throw new BsonSerializationException("Document size must be at least 5");
             }
+            int pipedDocumentStartPosition = bsonOutput.getPosition();
             bsonOutput.writeInt32(size);
             byte[] bytes = new byte[size - 4];
             bsonInput.readBytes(bytes);
             bsonOutput.writeBytes(bytes);
+
             binaryReader.setState(AbstractBsonReader.State.TYPE);
+
+            if (extraElements != null) {
+                bsonOutput.truncateToPosition(bsonOutput.getPosition() - 1);
+                setContext(new Context(getContext(), BsonContextType.DOCUMENT, pipedDocumentStartPosition));
+                setState(State.NAME);
+                pipeExtraElements(extraElements);
+                bsonOutput.writeByte(0);
+                bsonOutput.writeInt32(pipedDocumentStartPosition, bsonOutput.getPosition() - pipedDocumentStartPosition);
+                setContext(getContext().getParentContext());
+            }
 
             if (getContext() == null) {
                 setState(State.DONE);
@@ -320,6 +353,10 @@ public class BsonBinaryWriter extends AbstractBsonWriter {
                 }
                 setState(getNextState());
             }
+
+            validateSize(bsonOutput.getPosition() - pipedDocumentStartPosition);
+        } else if (extraElements != null) {
+            super.pipe(reader, extraElements);
         } else {
             super.pipe(reader);
         }
@@ -372,11 +409,15 @@ public class BsonBinaryWriter extends AbstractBsonWriter {
 
     private void backpatchSize() {
         int size = bsonOutput.getPosition() - getContext().startPosition;
-        if (size > maxDocumentSizeStack.peek()) {
-            throw new BsonSerializationException(format("Size %d is larger than MaxDocumentSize %d.", size,
-                                                        binaryWriterSettings.getMaxDocumentSize()));
-        }
+        validateSize(size);
         bsonOutput.writeInt32(bsonOutput.getPosition() - size, size);
+    }
+
+    private void validateSize(final int size) {
+        if (size > maxDocumentSizeStack.peek()) {
+            throw new BsonMaximumSizeExceededException(format("Document size of %d is larger than maximum of %d.", size,
+                    maxDocumentSizeStack.peek()));
+        }
     }
 
     protected class Context extends AbstractBsonWriter.Context {

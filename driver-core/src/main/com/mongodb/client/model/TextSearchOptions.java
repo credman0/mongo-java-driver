@@ -1,11 +1,11 @@
 /*
- * Copyright 2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,6 +15,8 @@
  */
 
 package com.mongodb.client.model;
+
+import com.mongodb.lang.Nullable;
 
 /**
  * Text search options for the {@link Filters#text(String, TextSearchOptions)} helper
@@ -33,6 +35,7 @@ public final class TextSearchOptions {
      *
      * @return the language to use for the text search if set or null
      */
+    @Nullable
     public String getLanguage() {
         return language;
     }
@@ -43,7 +46,7 @@ public final class TextSearchOptions {
      * @param language the language to use for the text search
      * @return this
      */
-    public TextSearchOptions language(final String language) {
+    public TextSearchOptions language(@Nullable final String language) {
         this.language = language;
         return this;
     }
@@ -54,6 +57,7 @@ public final class TextSearchOptions {
      * @return the case-sensitive flag if set or null
      * @mongodb.server.release 3.2
      */
+    @Nullable
     public Boolean getCaseSensitive() {
         return caseSensitive;
     }
@@ -65,7 +69,7 @@ public final class TextSearchOptions {
      * @return this
      * @mongodb.server.release 3.2
      */
-    public TextSearchOptions caseSensitive(final Boolean caseSensitive) {
+    public TextSearchOptions caseSensitive(@Nullable final Boolean caseSensitive) {
         this.caseSensitive = caseSensitive;
         return this;
     }
@@ -76,6 +80,7 @@ public final class TextSearchOptions {
      * @return the diacritic-sensitive flag if set or null
      * @mongodb.server.release 3.2
      */
+    @Nullable
     public Boolean getDiacriticSensitive() {
         return diacriticSensitive;
     }
@@ -87,9 +92,37 @@ public final class TextSearchOptions {
      * @return this
      * @mongodb.server.release 3.2
      */
-    public TextSearchOptions diacriticSensitive(final Boolean diacriticSensitive) {
+    public TextSearchOptions diacriticSensitive(@Nullable final Boolean diacriticSensitive) {
         this.diacriticSensitive = diacriticSensitive;
         return this;
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        TextSearchOptions that = (TextSearchOptions) o;
+
+        if (language != null ? !language.equals(that.language) : that.language != null) {
+            return false;
+        }
+        if (caseSensitive != null ? !caseSensitive.equals(that.caseSensitive) : that.caseSensitive != null) {
+            return false;
+        }
+        return diacriticSensitive != null ? diacriticSensitive.equals(that.diacriticSensitive) : that.diacriticSensitive == null;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = language != null ? language.hashCode() : 0;
+        result = 31 * result + (caseSensitive != null ? caseSensitive.hashCode() : 0);
+        result = 31 * result + (diacriticSensitive != null ? diacriticSensitive.hashCode() : 0);
+        return result;
     }
 
     @Override

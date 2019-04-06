@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2015 MongoDB, Inc.
+ * Copyright 2008-present MongoDB, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 package com.mongodb;
 
 import com.mongodb.annotations.Immutable;
+import com.mongodb.lang.Nullable;
 import org.bson.BsonBoolean;
 import org.bson.BsonDocument;
 import org.bson.BsonInt32;
@@ -43,7 +44,7 @@ import static com.mongodb.assertions.Assertions.notNull;
  *  <li> 0: Don't wait for acknowledgement from the server </li>
  *  <li> 1: Wait for acknowledgement, but don't wait for secondaries to replicate</li>
  *  <li> &gt;=2: Wait for one or more secondaries to also acknowledge </li>
- *  <li> "majority": Wait for a majority of secondaries to also acknowledge </li>
+ *  <li> "majority": Wait for a majority of data bearing nodes to acknowledge </li>
  *  <li> "&lt;tag set name&gt;": Wait for one or more secondaries to also acknowledge based on a tag set name</li>
  * </ul>
  * <p>{@code wtimeout} - how long to wait for secondaries to acknowledge before failing</p>
@@ -237,7 +238,7 @@ public class WriteConcern implements Serializable {
      */
     public WriteConcern(final String w) {
         this(w, null, null, null);
-        isTrueArgument("w != null", w != null);
+        notNull("w", w);
     }
 
     /**
@@ -292,7 +293,7 @@ public class WriteConcern implements Serializable {
      */
     @Deprecated
     public WriteConcern(final int w, final int wTimeoutMS, final boolean fsync, final boolean journal) {
-        this((Object) Integer.valueOf(w), wTimeoutMS, fsync, journal);
+        this((Object) w, wTimeoutMS, fsync, journal);
     }
 
     /**
@@ -311,9 +312,14 @@ public class WriteConcern implements Serializable {
 
     // Private constructor for creating the "default" unacknowledged write concern.  Necessary because there already a no-args
     // constructor that means something else.
-    private WriteConcern(final Object w, final Integer wTimeoutMS, final Boolean fsync, final Boolean journal) {
+    private WriteConcern(@Nullable final Object w, @Nullable final Integer wTimeoutMS, @Nullable final Boolean fsync,
+                         @Nullable final Boolean journal) {
         if (w instanceof Integer) {
             isTrueArgument("w >= 0", ((Integer) w) >= 0);
+            if ((Integer) w == 0) {
+                isTrueArgument("fsync is false when w is 0", fsync == null || !fsync);
+                isTrueArgument("journal is false when w is 0", journal == null || !journal);
+            }
         } else if (w != null) {
             isTrueArgument("w must be String or int", w instanceof String);
         }
@@ -363,6 +369,7 @@ public class WriteConcern implements Serializable {
      * @since 3.2
      * @mongodb.driver.manual core/write-concern/#timeouts wTimeout
      */
+    @Nullable
     public Integer getWTimeout(final TimeUnit timeUnit) {
         notNull("timeUnit", timeUnit);
         return wTimeoutMS == null ? null : (int) timeUnit.convert(wTimeoutMS, TimeUnit.MILLISECONDS);
@@ -426,7 +433,7 @@ public class WriteConcern implements Serializable {
     }
 
     /**
-     * Returns whether "getlasterror" should be called (w &gt; 0)
+     * Returns true if this write concern indicates that write operations must be acknowledged.
      *
      * @return whether this write concern will result in an an acknowledged write
      * @deprecated Prefer {@link #isAcknowledged()}
@@ -537,7 +544,7 @@ public class WriteConcern implements Serializable {
      * @mongodb.driver.manual core/write-concern/#replica-acknowledged Replica Acknowledged
      */
     public WriteConcern withW(final int w) {
-        return new WriteConcern((Object) Integer.valueOf(w), wTimeoutMS, fsync, journal);
+        return new WriteConcern(Integer.valueOf(w), wTimeoutMS, fsync, journal);
     }
 
     /**
